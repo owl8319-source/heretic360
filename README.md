@@ -5,7 +5,7 @@ Heretic: Shadow of the Serpent Riders on an RGH, JTAG or Bad Avatar Xbox 360, fr
 [xsdk](https://github.com/xenosworks/xsdk) and [SDL-xenon](https://github.com/xenosworks/SDL-xenon): true widescreen,
 double resolution (640x400), an uncapped frame rate and Crispy's other options, on the 360 controller.
 
-Versions up to 0.7 were built on Chocolate Doom 3.1.1, closer to the original; they're on the `chocolate` tag.
+Versions up to 0.7 were built on Chocolate Doom 3.1.1, closer to the original; they're on the `chocolate` branch.
 
 You need your own `heretic.wad` (v1.3, Shadow of the Serpent Riders). It isn't included.
 

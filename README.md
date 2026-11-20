@@ -48,7 +48,8 @@ curl.exe ftp://<console>/Hdd1/Homebrew/Heretic/heretic.log --user '<user>:<passw
 | Back | map | | |
 | Start | menu | | |
 
-The game always runs; push the stick part way to walk.
+The game always runs; push the stick part way to walk. The main menu's INFO shows these controls on a picture of the
+controller, then Raven's credits, in place of the PC's two keyboard pages.
 
 ### Developer cheat menu
 
@@ -75,6 +76,7 @@ D-pad or left stick chooses, A selects, B closes. It isn't in the main menu or t
 ## Layout
 
 - `src/` is Chocolate Doom 3.1.1's code, the files Heretic needs.
+- `tools/` has `make_controls_art.py`, which draws the INFO page's controller (needs Python 3 and Pillow).
 - `opl/` is Chocolate Doom's OPL library, for the music: the chip (Nuked OPL3, `opl3.c`) and its timing.
 - `xenon/` is the Xbox 360's side: video through xsdk's GPU layer (`i_video.c`, `blit.vert`, `blit.frag`), the
   controller and sound through SDL3 (`i_joystick.c`, `i_sound.c`), the timer, system and start (`i_timer.c`,
@@ -96,16 +98,23 @@ D-pad or left stick chooses, A selects, B closes. It isn't in the main menu or t
 - `src/heretic/g_game.c`: logs how long each level takes to load.
 - `src/heretic/devmenu.c` (new): the developer cheat menu.
 - `src/heretic/sb_bar.c`: `SB_DevCheat` runs the typed cheats' own functions for the cheat menu; `SB_DevTickerOn`.
-- `src/heretic/doomdef.h`: declares the cheat menu and those two.
+- `src/heretic/doomdef.h`: declares the cheat menu, those two and the controls page.
 - `src/heretic/d_main.c`: the cheat menu takes events first and draws last; the PAUSED graphic hides under it.
 - `src/v_video.c`: `V_DrawPatch` and `V_DrawPatchFlipped` skip a patch off the screen and log it, in place of
   Chocolate Doom's `I_Error`; `V_SetDrawText` (`v_video.h`) names the menu text being drawn.
-- `src/heretic/mn_menu.c`: `MN_DrTextA` and `MN_DrTextB` name their text for that log line.
+- `src/heretic/mn_menu.c`: `MN_DrTextA` and `MN_DrTextB` name their text for that log line; the save and load
+  screens' slot names are read once at startup, not each time a screen opens; INFO's first page is the controls
+  page and the PC keyboard pages are skipped.
+- `src/heretic/info360.c` (new): the INFO controls page. Its controller picture, `info360_art.h`, is made by
+  `tools/make_controls_art.py` from the WAD's palette (`python3 tools/make_controls_art.py heretic.wad`).
 - `opl/opl.c`: SDL3's mutex and condition names; its only driver is `opl_xsdk_driver`.
 - `opl/opl_internal.h`: declares `opl_xsdk_driver` in place of `opl_sdl_driver`.
 
 ## Changes
 
+- **0.7:** the log (`heretic.log`) is written by its own thread, once a second, so the game never waits on the
+  hard drive to log a line (the 2.3 s pause starting E1M2); the save and load screens open at once (their slot names
+  are read at startup); INFO shows the 360's controls on a picture of the controller.
 - **0.6:** a patch drawn off the screen is skipped and noted in `heretic.log` (where, its size, the text, the code
   address), not the end of the game: saving ended 0.5 with "Bad V_DrawPatch" on the console, not on a PC.
 - **0.5:** the developer cheat menu (LB + RB + Back, held).

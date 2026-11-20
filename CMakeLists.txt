@@ -36,4 +36,4 @@ target_link_libraries(heretic PRIVATE SDL3::SDL3-static)
 
 # Writes heretic_shaders.h, with blit_vert and blit_frag.
 xsdk_add_shaders(heretic xenon/blit.vert xenon/blit.frag)
-xsdk_add_xex(heretic NAME "Heretic" VERSION 0.6.0.0)
+xsdk_add_xex(heretic NAME "Heretic" VERSION 0.7.0.0)

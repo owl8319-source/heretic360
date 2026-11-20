@@ -141,6 +141,15 @@ boolean askforquit;
 static int typeofask;
 static boolean FileMenuKeySteal;
 static boolean slottextloaded;
+
+#ifdef HERETIC360
+// Heretic 360: the save slots are read once, at startup (MN_Init), and kept up to date as games are saved, not read
+// again each time the save or load menu opens: on the console each slot looked for can wait on an idle hard drive,
+// which held the menu up for seconds.
+#define RELOAD_SLOT_TEXT() ((void) 0)
+#else
+#define RELOAD_SLOT_TEXT() (slottextloaded = false)
+#endif
 static boolean joypadsave;
 static char SlotText[6][SLOTTEXTLEN + 2];
 static char oldSlotText[SLOTTEXTLEN + 2];
@@ -308,6 +317,11 @@ void MN_Init(void)
         EpisodeMenu.itemCount = 5;
         EpisodeMenu.y -= ITEM_HEIGHT;
     }
+
+#ifdef HERETIC360
+    // Heretic 360: the save slots, read now while the game is loading anyway (RELOAD_SLOT_TEXT).
+    MN_LoadSlotText();
+#endif
 }
 
 //---------------------------------------------------------------------------
@@ -1249,6 +1263,22 @@ boolean MN_Responder(event_t * event)
 
     if (InfoType)
     {
+#ifdef HERETIC360
+        // Heretic 360: the controls page (1), then the credits (3), and the shareware's ordering page (4); the PC
+        // keyboard pages (HELP1 and HELP2) are left out.
+        if (InfoType == 1)
+        {
+            InfoType = 3;
+        }
+        else if (InfoType == 3 && gamemode == shareware)
+        {
+            InfoType = 4;
+        }
+        else
+        {
+            InfoType = 0;
+        }
+#else
         if (gamemode == shareware)
         {
             InfoType = (InfoType + 1) % 5;
@@ -1257,6 +1287,7 @@ boolean MN_Responder(event_t * event)
         {
             InfoType = (InfoType + 1) % 4;
         }
+#endif
         if (key == KEY_ESCAPE)
         {
             InfoType = 0;
@@ -1384,7 +1415,7 @@ boolean MN_Responder(event_t * event)
                     paused = true;
                 }
                 S_StartSound(NULL, sfx_dorcls);
-                slottextloaded = false;     //reload the slot text, when needed
+                RELOAD_SLOT_TEXT();     //reload the slot text, when needed
             }
             return true;
         }
@@ -1402,7 +1433,7 @@ boolean MN_Responder(event_t * event)
                     paused = true;
                 }
                 S_StartSound(NULL, sfx_dorcls);
-                slottextloaded = false;     //reload the slot text, when needed
+                RELOAD_SLOT_TEXT();     //reload the slot text, when needed
             }
             return true;
         }
@@ -1418,7 +1449,7 @@ boolean MN_Responder(event_t * event)
                 paused = true;
             }
             S_StartSound(NULL, sfx_dorcls);
-            slottextloaded = false; //reload the slot text, when needed
+            RELOAD_SLOT_TEXT(); //reload the slot text, when needed
             return true;
         }
         else if (key == key_menu_detail)          // F5 (detail)
@@ -1442,7 +1473,7 @@ boolean MN_Responder(event_t * event)
                         paused = true;
                     }
                     S_StartSound(NULL, sfx_dorcls);
-                    slottextloaded = false; //reload the slot text, when needed
+                    RELOAD_SLOT_TEXT(); //reload the slot text, when needed
                     quicksave = -1;
                     P_SetMessage(&players[consoleplayer],
                                  "CHOOSE A QUICKSAVE SLOT", true);
@@ -1488,7 +1519,7 @@ boolean MN_Responder(event_t * event)
                     paused = true;
                 }
                 S_StartSound(NULL, sfx_dorcls);
-                slottextloaded = false;     //reload the slot text, when needed
+                RELOAD_SLOT_TEXT();     //reload the slot text, when needed
                 quickload = -1;
                 P_SetMessage(&players[consoleplayer],
                              "CHOOSE A QUICKLOAD SLOT", true);
@@ -1750,7 +1781,7 @@ void MN_ActivateMenu(void)
         paused = true;
     }
     S_StartSound(NULL, sfx_dorcls);
-    slottextloaded = false;     //reload the slot text, when needed
+    RELOAD_SLOT_TEXT();     //reload the slot text, when needed
 }
 
 //---------------------------------------------------------------------------
@@ -1793,6 +1824,14 @@ void MN_DeactivateMenu(void)
 void MN_DrawInfo(void)
 {
     I_SetPalette(W_CacheLumpName("PLAYPAL", PU_CACHE));
+#ifdef HERETIC360
+    // Heretic 360: the controls page in place of the PC keyboard pages (info360.c).
+    if (InfoType == 1)
+    {
+        MN_DrawControls360();
+        return;
+    }
+#endif
     V_DrawRawScreen(W_CacheLumpNum(W_GetNumForName("TITLE") + InfoType,
                                    PU_CACHE));
 //      V_DrawPatch(0, 0, W_CacheLumpNum(W_GetNumForName("TITLE")+InfoType,

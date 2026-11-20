@@ -870,6 +870,9 @@ boolean DM_Responder(event_t *event);
 void DM_Drawer(void);
 void SB_DevCheat(player_t *player, devcheat_t which);
 boolean SB_DevTickerOn(void);
+
+// Heretic 360: the INFO menu's controls page (info360.c).
+void MN_DrawControls360(void);
 #endif
 
 #include "sounds.h"

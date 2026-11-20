@@ -15,7 +15,6 @@
 
 #include "xsdk/gpu.h"
 #include "xsdk/kernel.h"
-#include "xsdk/log.h"
 #include "xsdk/present.h"
 #include "xsdk/shader.h"
 #include "xsdk/texture.h"
@@ -85,7 +84,8 @@ static byte *video_buffer_memory;
 
 static boolean initialized = false;
 
-// The slow frame report: a frame shown more than SLOW_FRAME_MS after the one before goes in the log, with how long
+// The slow frame report: a frame shown more than SLOW_FRAME_MS after the one before goes in the log (through stdout,
+// which i_main.c's writer thread takes to the disk, so the report itself doesn't wait on the drive), with how long
 // this frame waited on the display, on its texture, and on the sound mixer (i_sound.c).
 #define SLOW_FRAME_MS 150
 int I_TakeSoundLockWaitMS(void);
@@ -257,7 +257,7 @@ static void OpenGPU(void)
         I_Error("I_InitGraphics: xsdk_present_open failed: 0x%08X", (unsigned) status);
     }
 
-    xsdk_log_write("heretic360: display %ux%u, frame drawn %ux%u in the middle",
+    printf("heretic360: display %ux%u, frame drawn %ux%u in the middle\n",
                    (unsigned) display_width, (unsigned) display_height,
                    (unsigned) (display_height * 4 / 3), (unsigned) display_height);
 
@@ -288,8 +288,8 @@ static void ReportSlowFrame(void)
     {
         slow_frames++;
         // A wait on the menus' pause or a level's loading is expected; a long one in play is the freeze.
-        xsdk_log_write("heretic360: slow frame %u: %d ms since the last; waited %d ms for the display, %d ms for "
-                       "the texture, %d ms for the sound mixer",
+        printf("heretic360: slow frame %u: %d ms since the last; waited %d ms for the display, %d ms for "
+                       "the texture, %d ms for the sound mixer\n",
                        slow_frames, now - last_frame_ms, present_wait_ms, texture_wait_ms, sound_wait_ms);
     }
 
@@ -309,7 +309,7 @@ static void DrawFrame(void)
     if (!NT_SUCCESS(status))
     {
         // The GPU has hung: say so once, and stop drawing rather than wait 5 s a frame.
-        xsdk_log_write("heretic360: xsdk_present_begin failed: 0x%08X", (unsigned) status);
+        printf("heretic360: xsdk_present_begin failed: 0x%08X\n", (unsigned) status);
         gpu_failed = true;
         return;
     }
@@ -321,7 +321,7 @@ static void DrawFrame(void)
         status = xsdk_gpu_wait(frame_fences[t], FENCE_TIMEOUT_MS);
         if (!NT_SUCCESS(status))
         {
-            xsdk_log_write("heretic360: xsdk_gpu_wait failed: 0x%08X", (unsigned) status);
+            printf("heretic360: xsdk_gpu_wait failed: 0x%08X\n", (unsigned) status);
         }
     }
 
@@ -346,7 +346,7 @@ static void DrawFrame(void)
 
     if (frame_count == 0)
     {
-        xsdk_log_write("heretic360: first frame presented");
+        printf("heretic360: first frame presented\n");
     }
 
     ReportSlowFrame();

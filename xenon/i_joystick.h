@@ -10,6 +10,10 @@
 
 #define TRIGGER_THRESHOLD (30 * 32767 / 255)
 
+// The virtual button held while LB, RB and Back are all held: the developer cheat menu's combination
+// (src/heretic/devmenu.c). Past the buttons the joyb* variables name.
+#define JOY_DEV_COMBO_BUTTON 12
+
 // Directional input in an ev_joystick's data6, as the menus read it.
 #define DPAD_SHIFT 0
 #define LSTICK_SHIFT 4

@@ -48,14 +48,29 @@ curl.exe ftp://<console>/Hdd1/Homebrew/Heretic/heretic.log --user '<user>:<passw
 | Back | map | | |
 | Start | menu | | |
 
-The game always runs; push the stick part way to walk. LB + RB + Back is kept for the developer cheat menu, so Back
-opens no map while both bumpers are held.
+The game always runs; push the stick part way to walk.
+
+### Developer cheat menu
+
+Hold **LB + RB + Back** for about a second during a level. The game pauses and a small menu opens over it with five
+cheats, which work on every skill level:
+
+| Cheat | Same as typing |
+|---|---|
+| God Mode (on / off) | `quicken` |
+| All Keys | `skel` |
+| All Weapons and Full Ammo | `rambo` |
+| Kill Every Monster | `massacre` |
+| Frame-Rate Counter (on / off) | `ticker` |
+
+D-pad or left stick chooses, A selects, B closes. It isn't in the main menu or the options.
 
 ## What this version does and doesn't do yet
 
 - **Does:** the whole game, 4:3 at 720p in the middle of the screen with black bars, sharp pixels; sound effects;
-  music, as Heretic sounded on a Sound Blaster (AdLib OPL, emulated by Nuked OPL3); the controller; settings and saves.
-- **Not yet:** the developer cheat menu; true widescreen (Crispy Heretic, later).
+  music, as Heretic sounded on a Sound Blaster (AdLib OPL, emulated by Nuked OPL3); the controller; settings and saves;
+  a developer cheat menu.
+- **Not yet:** true widescreen (Crispy Heretic, later).
 
 ## Layout
 
@@ -79,11 +94,16 @@ opens no map while both bumpers are held.
 - `src/i_oplmusic.c`: `I_OPL_RegisterSong` converts and reads the song in memory, a temporary file only if that fails.
 - `src/m_misc.c`: `M_TempFile` puts temporary files in `game:`, the console having no `/tmp`.
 - `src/heretic/g_game.c`: logs how long each level takes to load.
+- `src/heretic/devmenu.c` (new): the developer cheat menu.
+- `src/heretic/sb_bar.c`: `SB_DevCheat` runs the typed cheats' own functions for the cheat menu; `SB_DevTickerOn`.
+- `src/heretic/doomdef.h`: declares the cheat menu and those two.
+- `src/heretic/d_main.c`: the cheat menu takes events first and draws last; the PAUSED graphic hides under it.
 - `opl/opl.c`: SDL3's mutex and condition names; its only driver is `opl_xsdk_driver`.
 - `opl/opl_internal.h`: declares `opl_xsdk_driver` in place of `opl_sdl_driver`.
 
 ## Changes
 
+- **0.5:** the developer cheat menu (LB + RB + Back, held).
 - **0.4:** songs are converted and read in memory, not through a temporary file (the console has no `/tmp`, so 0.3
   played none); the log notes how long each level takes to load, and any music call over 50 ms.
 - **0.3:** music: Chocolate Doom's OPL (AdLib) player, its chip emulated in the sound mixer.

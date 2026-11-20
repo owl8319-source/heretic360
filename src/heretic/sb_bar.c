@@ -1165,6 +1165,40 @@ static void CheatTickerFunc(player_t * player, Cheat_t * cheat)
     I_DisplayFPSDots(DisplayTicker);
 }
 
+#ifdef HERETIC360
+// Heretic 360: the developer cheat menu's way in (devmenu.c). Each runs the same function as the typed cheat, so it
+// does the same, on every skill level and with the same message.
+
+void SB_DevCheat(player_t *player, devcheat_t which)
+{
+    switch (which)
+    {
+        case DEVCHEAT_GOD:
+            CheatGodFunc(player, NULL);
+            break;
+        case DEVCHEAT_KEYS:
+            CheatKeysFunc(player, NULL);
+            break;
+        case DEVCHEAT_WEAPONS:
+            CheatWeaponsFunc(player, NULL);
+            break;
+        case DEVCHEAT_MASSACRE:
+            CheatMassacreFunc(player, NULL);
+            break;
+        case DEVCHEAT_TICKER:
+            CheatTickerFunc(player, NULL);
+            break;
+        default:
+            break;
+    }
+}
+
+boolean SB_DevTickerOn(void)
+{
+    return DisplayTicker != 0;
+}
+#endif
+
 static void CheatArtifact1Func(player_t * player, Cheat_t * cheat)
 {
     P_SetMessage(player, DEH_String(TXT_CHEATARTIFACTS1), false);

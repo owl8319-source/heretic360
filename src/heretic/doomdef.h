@@ -853,6 +853,25 @@ int MN_TextAWidth(const char *text);
 void MN_DrTextB(const char *text, int x, int y);
 int MN_TextBWidth(const char *text);
 
+#ifdef HERETIC360
+// Heretic 360: the developer cheat menu (devmenu.c) and the cheats it runs (sb_bar.c).
+typedef enum
+{
+    DEVCHEAT_GOD,
+    DEVCHEAT_KEYS,
+    DEVCHEAT_WEAPONS,
+    DEVCHEAT_MASSACRE,
+    DEVCHEAT_TICKER,
+    NUM_DEVCHEATS
+} devcheat_t;
+
+extern boolean DM_Active;
+boolean DM_Responder(event_t *event);
+void DM_Drawer(void);
+void SB_DevCheat(player_t *player, devcheat_t which);
+boolean SB_DevTickerOn(void);
+#endif
+
 #include "sounds.h"
 
 #endif // __DOOMDEF__

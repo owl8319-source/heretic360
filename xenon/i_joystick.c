@@ -14,7 +14,8 @@
 //   Back          map
 //   Start         menu
 //
-// LB + RB + Back is kept for the developer cheat menu (port-plan.md), so Back opens no map while both bumpers are held.
+// LB + RB + Back, held about a second in a level, opens the developer cheat menu (src/heretic/devmenu.c), so Back opens
+// no map while both bumpers are held. In that menu A selects and B closes, as in Heretic's.
 
 #include <stdio.h>
 
@@ -28,9 +29,11 @@
 #include "m_controls.h"
 #include "m_fixed.h"
 
-// Heretic's menu state (heretic/mn_menu.c): A and B mean select and back there, use and fly down in the game.
+// Heretic's menu state (heretic/mn_menu.c) and the developer cheat menu's (heretic/devmenu.c): A and B mean select
+// and back there, use and fly down in the game.
 extern boolean MenuActive;
 extern boolean askforquit;
+extern boolean DM_Active;
 
 // The virtual buttons the joyb* variables name.
 enum
@@ -204,8 +207,9 @@ static int ButtonState(void)
 #define SET(vb) (buttons |= 1 << (vb))
 
     if (Pressed(SDL_GAMEPAD_BUTTON_START)) SET(VB_MENU);
+    if (bumpers && Pressed(SDL_GAMEPAD_BUTTON_BACK)) SET(JOY_DEV_COMBO_BUTTON);
 
-    if (MenuActive || askforquit)
+    if (MenuActive || askforquit || DM_Active)
     {
         // The menus read fire as select and use as back.
         if (Pressed(SDL_GAMEPAD_BUTTON_SOUTH)) SET(VB_FIRE);

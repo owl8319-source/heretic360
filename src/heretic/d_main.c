@@ -101,6 +101,14 @@ void D_ProcessEvents(void)
 
     while ((ev = D_PopEvent()) != NULL)
     {
+#ifdef HERETIC360
+        // Heretic 360: the developer cheat menu first: it watches for its button combination, and takes everything
+        // while it's open (devmenu.c).
+        if (DM_Responder(ev))
+        {
+            continue;
+        }
+#endif
         if (F_Responder(ev))
         {
             continue;
@@ -180,7 +188,11 @@ void D_Display(void)
         V_DrawMouseSpeedBox(testcontrols_mousespeed);
     }
 
+#ifdef HERETIC360
+    if (paused && !MenuActive && !askforquit && !DM_Active)
+#else
     if (paused && !MenuActive && !askforquit)
+#endif
     {
         if (!netgame)
         {
@@ -197,6 +209,11 @@ void D_Display(void)
 
     // Menu drawing
     MN_Drawer();
+
+#ifdef HERETIC360
+    // Heretic 360: the developer cheat menu, over everything (devmenu.c).
+    DM_Drawer();
+#endif
 
     // Send out any new accumulation
     NetUpdate();

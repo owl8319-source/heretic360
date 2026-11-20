@@ -76,7 +76,10 @@ D-pad or left stick chooses, A selects, B closes. It isn't in the main menu or t
 ## Layout
 
 - `src/` is Chocolate Doom 3.1.1's code, the files Heretic needs.
-- `tools/` has `make_controls_art.py`, which draws the INFO page's controller (needs Python 3 and Pillow).
+- `tools/` has `make_controls_art.py`, which draws the INFO page's controller (needs Python 3 and Pillow). Given
+  a picture of a controller on white as well (`make_controls_art.py heretic.wad picture.jpg`), it makes
+  `src/heretic/info360_art_local.h` from it instead; the build uses that file when it's there. It's left out of git,
+  since a picture found on the web isn't ours to publish.
 - `opl/` is Chocolate Doom's OPL library, for the music: the chip (Nuked OPL3, `opl3.c`) and its timing.
 - `xenon/` is the Xbox 360's side: video through xsdk's GPU layer (`i_video.c`, `blit.vert`, `blit.frag`), the
   controller and sound through SDL3 (`i_joystick.c`, `i_sound.c`), the timer, system and start (`i_timer.c`,

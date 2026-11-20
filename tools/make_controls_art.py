@@ -2,12 +2,13 @@
 # Heretic 360: draws the controller on the INFO menu's controls page (src/heretic/info360.c) and writes it as
 # src/heretic/info360_art.h, in Heretic's palette, run-length coded.
 #
+#   python3 tools/make_controls_art.py path/to/heretic.wad art/360_controller.svg
+#       the picture the game uses: art/360_controller.svg (see art/README.md), drawn with rsvg-convert.
+#   python3 tools/make_controls_art.py path/to/heretic.wad picture.png
+#       any other picture of a controller on a white background.
 #   python3 tools/make_controls_art.py path/to/heretic.wad
-#       draws a plain controller of its own (no logo) into src/heretic/info360_art.h, the one in the repository.
-#   python3 tools/make_controls_art.py path/to/heretic.wad picture.jpg
-#       uses a picture of a controller instead (on a white background), into src/heretic/info360_art_local.h. That
-#       file is left out of git (.gitignore): a picture from the web isn't ours to publish. When it's there, the build
-#       uses it in place of info360_art.h.
+#       a plain controller drawn here, with no picture.
+# Each writes src/heretic/info360_art.h.
 #
 # The WAD gives only the palette, to pick the nearest colours; nothing of the WAD goes into the header.
 
@@ -108,6 +109,14 @@ PICTURE_TOP, PICTURE_BOTTOM = 22, 123
 def picture(path):
     # The white around the controller becomes clear: every near-white pixel joined to the picture's edge. White
     # inside the controller stays.
+    if path.lower().endswith('.svg'):
+        # An SVG has its own transparency: the clear around the controller is already clear.
+        import subprocess
+        import tempfile
+        png = tempfile.NamedTemporaryFile(suffix='.png', delete=False).name
+        subprocess.run(['rsvg-convert', '-w', '2000', path, '-o', png], check=True)
+        img = Image.open(png).convert('RGBA')
+        return fit(img.crop(img.getbbox()))
     src = Image.open(path).convert('RGB')
     w, h = src.size
     px = src.load()
@@ -132,8 +141,10 @@ def picture(path):
         for x in range(w):
             if clear[y * w + x]:
                 ipx[x, y] = (255, 255, 255, 0)
-    img = img.crop(img.getbbox())
+    return fit(img.crop(img.getbbox()))
 
+
+def fit(img):
     global BOX_X, BOX_Y, BOX_W, BOX_H
     BOX_H = PICTURE_BOTTOM - PICTURE_TOP
     BOX_W = round(img.size[0] * BOX_H / img.size[1])
@@ -181,9 +192,10 @@ def main():
         raise SystemExit('usage: make_controls_art.py heretic.wad [picture]')
     palette = read_palette(sys.argv[1])
     if len(sys.argv) == 3:
-        art, out = picture(sys.argv[2]), 'src/heretic/info360_art_local.h'
+        art = picture(sys.argv[2])
     else:
-        art, out = draw(), 'src/heretic/info360_art.h'
+        art = draw()
+    out = 'src/heretic/info360_art.h'
     data = encode(art, palette)
     lines = [
         '// Heretic 360: the controller on the INFO menu\'s controls page, written by tools/make_controls_art.py.',

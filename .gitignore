@@ -1,5 +1,3 @@
 build/
 *.wad
 *.WAD
-# A controller picture made from a picture off the web (tools/make_controls_art.py): not ours to publish.
-src/heretic/info360_art_local.h

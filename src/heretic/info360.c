@@ -9,15 +9,8 @@
 #include "w_wad.h"
 #include "z_zone.h"
 
-// A picture of the controller made from Brad's own copy (tools/make_controls_art.py heretic.wad picture.jpg), kept out
-// of git; without it, the plain controller drawn by the same tool.
-#if defined(__has_include) && __has_include("info360_art_local.h")
-#include "info360_art_local.h"
-#define CONTROLS_ART_PICTURE 1
-#else
+// The controller: art/360_controller.svg, made into Heretic's palette by tools/make_controls_art.py.
 #include "info360_art.h"
-#define CONTROLS_ART_PICTURE 0
-#endif
 
 // How dark the title screen behind the page is: a light level of COLORMAP, 0 (as bright as the game) to 31.
 #define BACKGROUND_DARKNESS 29
@@ -66,21 +59,12 @@ typedef struct
     int y;
 } tag_t;
 
-#if CONTROLS_ART_PICTURE
 static const tag_t tags[] = {
     { "LT", 92, 26 },
     { "RT", 216, 26 },
     { "LB", 76, 38 },
     { "RB", 230, 38 },
 };
-#else
-static const tag_t tags[] = {
-    { "LT", 94, 31 },
-    { "RT", 213, 31 },
-    { "LB", 79, 42 },
-    { "RB", 226, 42 },
-};
-#endif
 
 #define COUNT(a) ((int) (sizeof(a) / sizeof((a)[0])))
 

@@ -22,6 +22,7 @@
 #include "m_bbox.h"
 #include "m_random.h"
 #include "p_local.h"
+#include "p_mapformat.h"
 #include "s_sound.h"
 
 /*
@@ -102,7 +103,7 @@ line_t *ceilingline;
 // keep track of special lines as they are hit, but don't process them
 // until the move is proven valid
 #define	MAXSPECIALCROSS		8
-line_t *spechit[MAXSPECIALCROSS];
+line_t **spechit; // [crispy] remove SPECHIT limit
 int numspechit;
 
 mobj_t *onmobj;                 //generic global onmobj...used for landing on pods/players
@@ -212,6 +213,10 @@ boolean P_TeleportMove(mobj_t * thing, fixed_t x, fixed_t y)
     thing->x = x;
     thing->y = y;
 
+    // [AM] Don't interpolate mobjs that pass
+    //      through teleporters
+    thing->interp = false;
+
     P_SetThingPosition(thing);
 
     return true;
@@ -224,6 +229,23 @@ boolean P_TeleportMove(mobj_t * thing, fixed_t x, fixed_t y)
  
 ===============================================================================
 */
+
+// [crispy] remove SPECHIT limit
+static void check_spechit(void)
+{
+	static int spechit_max;
+
+	if (numspechit >= spechit_max)
+	{
+		spechit_max = spechit_max ? spechit_max * 2 : MAXSPECIALCROSS;
+		spechit = I_Realloc(spechit, sizeof(*spechit) * spechit_max);
+
+		if (spechit_max == 2 * MAXSPECIALCROSS)
+		{
+			fprintf(stderr, "PIT_CheckLine: Hit SPECHIT limit!\n");
+		}
+	}
+}
 
 /*
 ==================
@@ -264,6 +286,7 @@ boolean PIT_CheckLine(line_t * ld)
         {                       // Missiles can trigger impact specials
             if (ld->special)
             {
+                check_spechit(); // [crispy] remove SPECHIT limit
                 spechit[numspechit] = ld;
                 numspechit++;
             }
@@ -299,6 +322,7 @@ boolean PIT_CheckLine(line_t * ld)
     }
     if (ld->special)
     {                           // Contacted a special line, add it to the list
+        check_spechit(); // [crispy] remove SPECHIT limit
         spechit[numspechit] = ld;
         numspechit++;
     }
@@ -1285,6 +1309,7 @@ boolean PTR_ShootTraverse(intercept_t * in)
 
     if (in->isaline)
     {
+        boolean safe = false;
         li = in->d.line;
         if (li->special)
             P_ShootSpecialLine(shootthing, li);
@@ -1328,10 +1353,39 @@ boolean PTR_ShootTraverse(intercept_t * in)
             if (z > li->frontsector->ceilingheight)
                 return false;   // don't shoot the sky!
             if (li->backsector && li->backsector->ceilingpic == skyflatnum)
+            {
+                // [crispy] fix hitscan puffs not appearing in outdoor areas
+                if (li->backsector->ceilingheight < z)
                 return false;   // it's a sky hack wall
+                else
+                safe = true;
+            }
         }
 
-        P_SpawnPuff(x, y, z);
+        // [crispy] check if the hitscan puff's z-coordinate is below or above
+        // its spawning sector's floor or ceiling, respectively, and move its
+        // coordinates to the point where the trajectory hits the plane
+        if (aimslope)
+        {
+            const int lineside = P_PointOnLineSide(x, y, li);
+            int side;
+
+            if ((side = li->sidenum[lineside]) != NO_INDEX)
+            {
+                const sector_t *const sector = sides[side].sector;
+
+                if (z < sector->floorheight ||
+                    (z > sector->ceilingheight && sector->ceilingpic != skyflatnum))
+                {
+                    z = BETWEEN(sector->floorheight, sector->ceilingheight, z);
+                    frac = FixedDiv(z - shootz, FixedMul(aimslope, attackrange));
+                    x = trace.x + FixedMul (trace.dx, frac);
+                    y = trace.y + FixedMul (trace.dy, frac);
+                }
+            }
+        }
+
+        P_SpawnPuffSafe(x, y, z, safe);
         return false;           // don't go any farther
     }
 

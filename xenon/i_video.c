@@ -1,13 +1,16 @@
-// Heretic 360: Chocolate Doom's i_video.c for the Xbox 360 through xsdk.
+// Heretic 360: Crispy Doom's i_video.c for the Xbox 360 through xsdk.
 //
-// Heretic draws each frame into I_VideoBuffer, 320x200 bytes of palette indexes. I_FinishUpdate turns them into
-// colours through the palette, uploads them into a texture and has the GPU draw it, point sampled, on a 4:3 quad in
-// the middle of the 1280x720 display: 960x720, black bars either side, the same 4:3 shape Chocolate Doom's
-// aspect_ratio_correct gives on a PC. xsdk scales the 720p frame to the console's output.
+// Heretic draws each frame into I_VideoBuffer, SCREENWIDTH x SCREENHEIGHT bytes of palette indexes: 320x200, or
+// 640x400 with Crispy's high resolution, and wider with its widescreen (I_GetScreenDimensions). I_FinishUpdate turns
+// them into colours through the palette, uploads them into a texture and has the GPU draw it, point sampled, on a quad
+// in the middle of the 1280x720 display, shaped as Crispy's aspect_ratio_correct shows it on a PC: 4:3, 960x720 with
+// black bars either side, or the display's full 16:9 in widescreen. xsdk scales the 720p frame to the console's
+// output. Crispy's menu changes the resolution and widescreen as the game runs (I_ReInitGraphics).
 
 #include "config.h"
 
 #include <limits.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +25,7 @@
 #include "heretic_shaders.h"
 
 #include "d_event.h"
+#include "d_loop.h"
 #include "deh_str.h"
 #include "doomtype.h"
 #include "i_input.h"
@@ -29,6 +33,7 @@
 #include "i_system.h"
 #include "i_timer.h"
 #include "i_video.h"
+#include "crispy.h"
 #include "m_argv.h"
 #include "m_config.h"
 #include "m_misc.h"
@@ -75,12 +80,26 @@ static uint32_t display_height;
 static unsigned int frame_count;
 static boolean gpu_failed;
 
-// Heretic's frame as colours, 0xAARRGGBB, before it's uploaded.
-static uint32_t argb_frame[SCREENHEIGHT * SCREENWIDTH];
+int SCREENWIDTH, SCREENHEIGHT, SCREENHEIGHT_4_3;
+int NONWIDEWIDTH; // [crispy] non-widescreen SCREENWIDTH
+int WIDESCREENDELTA; // [crispy] horizontal widescreen offset
+
+// [AM] Fractional part of the current tic, in [0.0, 1.0), for drawing between tics.
+fixed_t fractionaltic;
+
+// [crispy] the gamma levels, Crispy's 18 (I_SetGammaTable).
+byte gamma2table[18][256];
+
+// Heretic's frame as palette indexes, and as colours, 0xAARRGGBB, before it's uploaded; both as big as Crispy's
+// largest frame, SCREENWIDTH x SCREENHEIGHT of them used.
+static pixel_t video_buffer_memory[MAXWIDTH * MAXHEIGHT];
+static uint32_t argb_frame[MAXWIDTH * MAXHEIGHT];
 static uint32_t palette_argb[256];
 static byte palette_rgb[256][3];
 
-static byte *video_buffer_memory;
+// The size the textures and the quad were made for.
+static int texture_width;
+static int texture_height;
 
 static boolean initialized = false;
 
@@ -107,7 +126,8 @@ int window_height = 720;
 int fullscreen_width = 0, fullscreen_height = 0;
 static int max_scaling_buffer_pixels = 16000000;
 int fullscreen = true;
-int aspect_ratio_correct = true;
+// 1, as on a PC: Heretic's 200 lines shown as 240, a 320x200 frame as 4:3. Crispy's widescreen needs it.
+int aspect_ratio_correct = 1;
 // 0 draws the frame point sampled, sharp pixels; 1 filters it.
 int smooth_pixel_scaling = false;
 int integer_scaling = false;
@@ -176,17 +196,28 @@ static void WriteGPU(volatile uint32_t *memory, const void *data, uint32_t size_
     xsdk_gpu_invalidate(xsdk_gpu_address(memory), size_bytes);
 }
 
-// The 4:3 quad in the middle of the display, as two triangles, in clip space (y up), v = 0 the frame's top row.
+// The quad in the middle of the display, as two triangles, in clip space (y up), v = 0 the frame's top row, shaped as
+// the frame is shown: SCREENWIDTH to SCREENHEIGHT, the height stretched to 6/5 with aspect_ratio_correct. The full
+// height and 960 wide for 4:3 (320x200 or 640x400); the full 1280 for 16:9; for a frame wider than the display (21:9)
+// the full width, with black bars above and below, as Crispy shows it on a PC.
 static void WriteQuad(void)
 {
-    float half_width = (float) (display_height * 4 / 3) / (float) display_width;
+    const int shown_height = (aspect_ratio_correct == 1) ? 6 * SCREENHEIGHT / 5 : SCREENHEIGHT;
+    int quad_width = (int) display_height * SCREENWIDTH / shown_height;
+    int quad_height = (int) display_height;
 
-    if (half_width > 1.0f)
+    if (quad_width > (int) display_width)
     {
-        half_width = 1.0f;
+        quad_width = (int) display_width;
+        quad_height = (int) display_width * shown_height / SCREENWIDTH;
     }
 
-    const float l = -half_width, r = half_width, t = 1.0f, b = -1.0f;
+    printf("heretic360: frame %dx%d, drawn %dx%d in the middle of %ux%u\n", SCREENWIDTH, SCREENHEIGHT, quad_width,
+           quad_height, (unsigned) display_width, (unsigned) display_height);
+
+    const float half_width = (float) quad_width / (float) display_width;
+    const float half_height = (float) quad_height / (float) display_height;
+    const float l = -half_width, r = half_width, t = half_height, b = -half_height;
     const float quad[QUAD_VERTICES][VERTEX_FLOATS] = {
         { l, t, 0.0f, 0.0f }, { r, t, 1.0f, 0.0f }, { l, b, 0.0f, 1.0f },
         { l, b, 0.0f, 1.0f }, { r, t, 1.0f, 0.0f }, { r, b, 1.0f, 1.0f },
@@ -235,16 +266,6 @@ static void OpenGPU(void)
         I_Error("I_InitGraphics: loading the shaders failed: 0x%08X", (unsigned) status);
     }
 
-    for (unsigned int i = 0; i < FRAME_TEXTURES; i++)
-    {
-        status = xsdk_texture_create(&frame_textures[i], XSDK_FORMAT_A8R8G8B8, SCREENWIDTH, SCREENHEIGHT, 1, true);
-        if (!NT_SUCCESS(status))
-        {
-            I_Error("I_InitGraphics: xsdk_texture_create failed: 0x%08X", (unsigned) status);
-        }
-        frame_fences[i] = 0;
-    }
-
     quad_vertices = xsdk_gpu_alloc(VERTEX_ALLOC_BYTES);
     if (quad_vertices == NULL)
     {
@@ -257,13 +278,64 @@ static void OpenGPU(void)
         I_Error("I_InitGraphics: xsdk_present_open failed: 0x%08X", (unsigned) status);
     }
 
-    printf("heretic360: display %ux%u, frame drawn %ux%u in the middle\n",
-                   (unsigned) display_width, (unsigned) display_height,
-                   (unsigned) (display_height * 4 / 3), (unsigned) display_height);
-
     screen_width = (int) display_width;
     screen_height = (int) display_height;
 
+    MakeSampler();
+}
+
+// Waits until the GPU has drawn every frame it was given, so its textures and the quad can change.
+static void WaitForGPU(void)
+{
+    for (unsigned int i = 0; i < FRAME_TEXTURES; i++)
+    {
+        if (frame_fences[i] != 0)
+        {
+            const NTSTATUS status = xsdk_gpu_wait(frame_fences[i], FENCE_TIMEOUT_MS);
+            if (!NT_SUCCESS(status))
+            {
+                printf("heretic360: xsdk_gpu_wait failed: 0x%08X\n", (unsigned) status);
+            }
+            frame_fences[i] = 0;
+        }
+    }
+}
+
+// The textures the frames go into, SCREENWIDTH x SCREENHEIGHT, and the quad they're drawn on: made at the start and
+// again when Crispy's menu changes the resolution, widescreen or the aspect ratio.
+static void MakeFrameTextures(void)
+{
+    if (texture_width == SCREENWIDTH && texture_height == SCREENHEIGHT)
+    {
+        return;
+    }
+
+    WaitForGPU();
+
+    for (unsigned int i = 0; i < FRAME_TEXTURES; i++)
+    {
+        if (texture_width != 0)
+        {
+            xsdk_texture_free(&frame_textures[i]);
+        }
+
+        const NTSTATUS status =
+            xsdk_texture_create(&frame_textures[i], XSDK_FORMAT_A8R8G8B8, SCREENWIDTH, SCREENHEIGHT, 1, true);
+        if (!NT_SUCCESS(status))
+        {
+            I_Error("I_InitGraphics: xsdk_texture_create %dx%d failed: 0x%08X", SCREENWIDTH, SCREENHEIGHT,
+                    (unsigned) status);
+        }
+    }
+
+    texture_width = SCREENWIDTH;
+    texture_height = SCREENHEIGHT;
+}
+
+static void MakeFrame(void)
+{
+    MakeFrameTextures();
+    WaitForGPU();
     WriteQuad();
     MakeSampler();
 }
@@ -379,11 +451,52 @@ void I_FinishUpdate(void)
             I_VideoBuffer[(SCREENHEIGHT - 1) * SCREENWIDTH + i] = 0x0;
     }
 
+    // [crispy] [AM] the frame-rate counter
+    {
+        static int lastmili;
+        static int fpscount;
+        const int mili = I_GetTimeMS();
+
+        fpscount++;
+
+        if (mili - lastmili >= 1000)
+        {
+            crispy->fps = (fpscount * 1000) / (mili - lastmili);
+            fpscount = 0;
+            lastmili = mili;
+        }
+    }
+
     V_DrawDiskIcon();
     ConvertFrame();
     V_RestoreDiskBackground();
 
     DrawFrame();
+
+    // [crispy] the frame-rate limit, for an uncapped frame rate; the display's 60 Hz caps it anyway, as each frame
+    // waits for the one before it to be shown.
+    if (crispy->uncapped && !singletics && crispy->fpslimit >= TICRATE)
+    {
+        const uint64_t target_time = 1000000ull / crispy->fpslimit;
+        static uint64_t start_time;
+
+        while (1)
+        {
+            const uint64_t current_time = I_GetTimeUS();
+            const uint64_t elapsed_time = current_time - start_time;
+
+            if (elapsed_time >= target_time)
+            {
+                start_time = current_time;
+                break;
+            }
+
+            if (target_time - elapsed_time > 1000)
+            {
+                I_Sleep((int) ((target_time - elapsed_time - 1000) / 1000));
+            }
+        }
+    }
 }
 
 void I_ReadScreen(pixel_t *scr)
@@ -396,9 +509,10 @@ void I_SetPalette(byte *doompalette)
     for (int i = 0; i < 256; ++i)
     {
         // The PC's VGA kept 6 bits a channel, so the bottom two go, as Chocolate Doom does.
-        const byte r = gammatable[usegamma][*doompalette++] & ~3;
-        const byte g = gammatable[usegamma][*doompalette++] & ~3;
-        const byte b = gammatable[usegamma][*doompalette++] & ~3;
+        // [crispy] Crispy's 18 gamma levels.
+        const byte r = gamma2table[crispy->gamma][*doompalette++] & ~3;
+        const byte g = gamma2table[crispy->gamma][*doompalette++] & ~3;
+        const byte b = gamma2table[crispy->gamma][*doompalette++] & ~3;
 
         palette_rgb[i][0] = r;
         palette_rgb[i][1] = g;
@@ -476,8 +590,10 @@ void I_InitGraphics(void)
 
     OpenGPU();
 
-    // The 320x200 canvas Heretic draws into.
-    video_buffer_memory = Z_Malloc(SCREENWIDTH * SCREENHEIGHT, PU_STATIC, NULL);
+    I_GetScreenDimensions();
+    V_Init();
+    MakeFrame();
+
     I_VideoBuffer = video_buffer_memory;
     V_RestoreBuffer();
     memset(I_VideoBuffer, 0, SCREENWIDTH * SCREENHEIGHT * sizeof(*I_VideoBuffer));
@@ -488,6 +604,121 @@ void I_InitGraphics(void)
     initialized = true;
 
     I_AtExit(I_ShutdownGraphics, true);
+}
+
+// [crispy] SCREENWIDTH, SCREENHEIGHT, NONWIDEWIDTH and WIDESCREENDELTA from Crispy's resolution and widescreen
+// settings, as Crispy Doom works them out, the display's shape being the console's 16:9.
+void I_GetScreenDimensions(void)
+{
+    int w = 16, h = 9;
+    int ah;
+
+    SCREENWIDTH = ORIGWIDTH << crispy->hires;
+    SCREENHEIGHT = ORIGHEIGHT << crispy->hires;
+    SCREENHEIGHT_4_3 = (ORIGHEIGHT_4_3 << crispy->hires);
+
+    NONWIDEWIDTH = SCREENWIDTH;
+
+    ah = (aspect_ratio_correct == 1) ? (6 * SCREENHEIGHT / 5) : SCREENHEIGHT;
+
+    // [crispy] widescreen rendering makes no sense without aspect ratio correction
+    if (crispy->widescreen && aspect_ratio_correct == 1)
+    {
+        switch (crispy->widescreen)
+        {
+            case RATIO_16_10:
+                w = 16;
+                h = 10;
+                break;
+            case RATIO_16_9:
+                w = 16;
+                h = 9;
+                break;
+            case RATIO_21_9:
+                w = 21;
+                h = 9;
+                break;
+            default:
+                // RATIO_MATCH_SCREEN: the console's display.
+                break;
+        }
+
+        SCREENWIDTH = w * ah / h;
+        // [crispy] make sure SCREENWIDTH is an integer multiple of 4 ...
+        SCREENWIDTH = (SCREENWIDTH + (crispy->hires ? 0 : 3)) & (int) ~3;
+        // [crispy] ... but never exceeds MAXWIDTH (array size!)
+        SCREENWIDTH = MIN(SCREENWIDTH, MAXWIDTH);
+    }
+
+    WIDESCREENDELTA = ((SCREENWIDTH - NONWIDEWIDTH) >> crispy->hires) / 2;
+}
+
+// [crispy] Crispy's menu has changed the resolution, widescreen, the aspect ratio or vsync. The frame buffer is as big
+// as the largest frame, so only the textures and the quad change.
+void I_ReInitGraphics(int reinit)
+{
+    if (reinit & REINIT_FRAMEBUFFERS)
+    {
+        I_GetScreenDimensions();
+
+        // [crispy] re-initialize resolution-agnostic patch drawing
+        V_Init();
+        I_VideoBuffer = video_buffer_memory;
+        V_RestoreBuffer();
+        memset(I_VideoBuffer, 0, SCREENWIDTH * SCREENHEIGHT * sizeof(*I_VideoBuffer));
+    }
+
+    if (initialized)
+    {
+        MakeFrame();
+    }
+}
+
+// [crispy] Each frame waits for the display's vertical blank (xsdk_present_open's swap interval of 1).
+void I_ToggleVsync(void)
+{
+}
+
+void I_UpdateFracTic(void) // [crispy]
+{
+    fractionaltic = I_GetFracRealTime();
+}
+
+void I_StartDisplay(void) // [crispy]
+{
+}
+
+static const float gammalevels[9] =
+{
+    // Darker
+    0.50f, 0.55f, 0.60f, 0.65f, 0.70f, 0.75f, 0.80f, 0.85f, 0.90f,
+};
+
+// [crispy] 9 darker gamma levels, the 5 original ones, and 4 between them.
+void I_SetGammaTable(void)
+{
+    int i, j, k;
+
+    for (i = 0; i < 9; ++i)
+    {
+        for (j = 0; j < 256; ++j)
+        {
+            gamma2table[i][j] = (byte) (pow(j / 255.0, 1.0 / gammalevels[i]) * 255.0 + 0.5);
+        }
+    }
+
+    for (i = 9, k = 0; i < 18 && k < 5; i += 2, k++)
+    {
+        memcpy(gamma2table[i], gammatable[k], 256);
+    }
+
+    for (i = 10, k = 0; i < 18 && k < 4; i += 2, k++)
+    {
+        for (j = 0; j < 256; j++)
+        {
+            gamma2table[i][j] = (gammatable[k][j] + gammatable[k + 1][j]) / 2;
+        }
+    }
 }
 
 void I_BindVideoVariables(void)

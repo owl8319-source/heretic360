@@ -142,6 +142,12 @@ void P_RecursiveSound(sector_t * sec, int soundblocks)
 
 void P_NoiseAlert(mobj_t * target, mobj_t * emmiter)
 {
+    // [crispy] monsters are deaf with NOTARGET cheat
+    if (target && target->player && (target->player->cheats & CF_NOTARGET))
+    {
+        return;
+    }
+
     soundtarget = target;
     validcount++;
     P_RecursiveSound(emmiter->subsector->sector, 0);
@@ -241,7 +247,6 @@ fixed_t xspeed[8] =
     { FRACUNIT, 47000, 0, -47000, -FRACUNIT, -47000, 0, 47000 };
 fixed_t yspeed[8] =
     { 0, 47000, FRACUNIT, 47000, 0, -47000, -FRACUNIT, -47000 };
-
 
 boolean P_Move(mobj_t * actor)
 {
@@ -543,6 +548,11 @@ boolean P_LookForPlayers(mobj_t * actor, boolean allaround)
             return false;       // done looking
 
         player = &players[actor->lastlook];
+
+        // [crispy] monsters don't look for players with NOTARGET cheat
+        if (player->cheats & CF_NOTARGET)
+            continue;
+
         if (player->health <= 0)
             continue;           // dead
         if (!P_CheckSight(actor, player->mo))
@@ -617,7 +627,6 @@ void A_Look(mobj_t *actor, player_t *player, pspdef_t *psp)
             goto seeyou;
     }
 
-
     if (!P_LookForPlayers(actor, false))
         return;
 
@@ -683,7 +692,7 @@ void A_Chase(mobj_t *actor, player_t *player, pspdef_t *psp)
         actor->threshold--;
     }
 
-    if (gameskill == sk_nightmare)
+    if (gameskill == sk_nightmare || critical->fast)
     {                           // Monsters move faster in nightmare mode
         actor->tics -= actor->tics / 2;
         if (actor->tics < 3)
@@ -725,7 +734,7 @@ void A_Chase(mobj_t *actor, player_t *player, pspdef_t *psp)
     if (actor->flags & MF_JUSTATTACKED)
     {
         actor->flags &= ~MF_JUSTATTACKED;
-        if (gameskill != sk_nightmare)
+        if (gameskill != sk_nightmare && !critical->fast)
             P_NewChaseDir(actor);
         return;
     }
@@ -746,7 +755,7 @@ void A_Chase(mobj_t *actor, player_t *player, pspdef_t *psp)
 //
     if (actor->info->missilestate)
     {
-        if (gameskill < sk_nightmare && actor->movecount)
+        if (gameskill < sk_nightmare && actor->movecount && !critical->fast)
             goto nomissile;
         if (!P_CheckMissileRange(actor))
             goto nomissile;

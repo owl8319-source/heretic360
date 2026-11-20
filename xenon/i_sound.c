@@ -608,3 +608,15 @@ void I_BindSoundVariables(void)
     M_BindIntVariable("use_libsamplerate",       &use_libsamplerate);
     M_BindFloatVariable("libsamplerate_scale",   &libsamplerate_scale);
 }
+
+// [crispy] Whether a block of memory is a .mid file, or a .mus file (i_oplmusic.c asks).
+
+boolean IsMid(byte *mem, int len)
+{
+    return len > 4 && !memcmp(mem, "MThd", 4);
+}
+
+boolean IsMus(byte *mem, int len)
+{
+    return len > 4 && !memcmp(mem, "MUS\x1a", 4);
+}

@@ -20,11 +20,25 @@
 
 #include "d_mode.h"
 
+// [crispy]
+typedef struct
+{
+    const char *name;
+    const char new_name[8];
+} lump_rename_t;
+
 boolean W_ParseCommandLine(void);
 void W_CheckCorrectIWAD(GameMission_t mission);
 
+int W_MergeDump (const char *file);
+int W_LumpDump (const char *lumpname);
+
 // Autoload all .wad files from the given directory:
 void W_AutoLoadWADs(const char *path);
+
+// [crispy] Autoload from directory with lump renaming
+void W_AutoLoadWADsRename(const char *path, const lump_rename_t *renames,
+                          int num_renames);
 
 #endif /* #ifndef W_MAIN_H */
 

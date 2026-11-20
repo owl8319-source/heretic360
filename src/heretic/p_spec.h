@@ -39,23 +39,22 @@ typedef struct
 //
 //      source animation definition
 //
-typedef struct
+typedef PACKED_STRUCT (
 {
-    int istexture;          // if false, it's a flat
+    signed char istexture;      // if false, it's a flat
     char endname[9];
     char startname[9];
     int speed;
-} animdef_t;
+}) animdef_t;
 
 #define	MAXANIMS		32
 
-extern anim_t anims[MAXANIMS], *lastanim;
 extern int *TerrainTypes;
 
 //
 //      Animating line specials
 //
-#define	MAXLINEANIMS		64
+#define	MAXLINEANIMS		64*256
 extern short numlinespecials;
 extern line_t *linespeciallist[MAXLINEANIMS];
 
@@ -160,12 +159,12 @@ void P_SpawnGlowingLight(sector_t * sector);
 
 ===============================================================================
 */
-typedef struct
+typedef PACKED_STRUCT (
 {
     char name1[9];
     char name2[9];
     short episode;
-} switchlist_t;
+}) switchlist_t;
 
 typedef enum
 {
@@ -187,7 +186,8 @@ typedef struct
 #define	MAXBUTTONS	16      // 4 players, 4 buttons each at once, max.
 #define BUTTONTIME	35      // 1 second
 
-extern button_t buttonlist[MAXBUTTONS];
+extern button_t	*buttonlist;
+extern int maxbuttons;
 
 void P_ChangeSwitchTexture(line_t * line, int useAgain);
 void P_InitSwitchList(void);
@@ -233,7 +233,7 @@ typedef struct
 
 #define	PLATWAIT	3
 #define	PLATSPEED	FRACUNIT
-#define	MAXPLATS	30
+#define	MAXPLATS	30*256
 
 extern plat_t *activeplats[MAXPLATS];
 

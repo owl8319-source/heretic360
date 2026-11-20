@@ -3,6 +3,7 @@
 // button does. INFO then goes on to Raven's credits page, as before.
 
 #include "doomdef.h"
+#include "crispy.h"
 #include "deh_str.h"
 #include "i_video.h"
 #include "v_video.h"
@@ -73,7 +74,8 @@ static void DrawDarkTitle(void)
     const byte *colormap = (const byte *) W_CacheLumpName(DEH_String("COLORMAP"), PU_CACHE)
                          + 256 * BACKGROUND_DARKNESS;
 
-    V_DrawRawScreen(W_CacheLumpName(DEH_String("TITLE"), PU_CACHE));
+    // [crispy] the title screen, centred, its sides filled in widescreen as Crispy fills them.
+    V_DrawFullscreenRawOrPatch(W_GetNumForName(DEH_String("TITLE")));
 
     for (int i = 0; i < SCREENWIDTH * SCREENHEIGHT; i++)
     {
@@ -82,9 +84,12 @@ static void DrawDarkTitle(void)
 }
 
 // Unpacks info360_art.h into its box: per byte h, h & 0x80 is a run of (h & 0x7f) + 1 clear pixels, otherwise
-// h + 1 palette indexes follow.
+// h + 1 palette indexes follow. The box is on Heretic's 320x200 screen: with Crispy's high resolution each pixel is
+// drawn 2x2, and widescreen moves it right by WIDESCREENDELTA, as Crispy draws the menus.
 static void DrawController(void)
 {
+    const int scale = 1 << crispy->hires;
+
     const unsigned char *in = controls_art;
     const unsigned char *const end = controls_art + sizeof(controls_art);
     int i = 0;
@@ -101,10 +106,17 @@ static void DrawController(void)
                 continue;
             }
 
-            const int x = CONTROLS_ART_X + i % CONTROLS_ART_W;
-            const int y = CONTROLS_ART_Y + i / CONTROLS_ART_W;
+            const int x = (CONTROLS_ART_X + WIDESCREENDELTA + i % CONTROLS_ART_W) * scale;
+            const int y = (CONTROLS_ART_Y + i / CONTROLS_ART_W) * scale;
+            const pixel_t colour = *in++;
 
-            I_VideoBuffer[y * SCREENWIDTH + x] = *in++;
+            for (int dy = 0; dy < scale; dy++)
+            {
+                for (int dx = 0; dx < scale; dx++)
+                {
+                    I_VideoBuffer[(y + dy) * SCREENWIDTH + x + dx] = colour;
+                }
+            }
         }
     }
 }

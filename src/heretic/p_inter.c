@@ -140,6 +140,23 @@ void P_SetMessage(player_t * player, const char *message, boolean ultmsg)
 
 //--------------------------------------------------------------------------
 //
+// PROC P_SetCenterMessage
+//
+// [crispy] Set centered message
+//
+//--------------------------------------------------------------------------
+void P_SetCenterMessage(player_t * player, const char *message)
+{
+    if (!messageson)
+    {
+        return;
+    }
+    player->centerMessage = message;
+    player->centerMessageTics = MESSAGETICS;
+    BorderTopRefresh = true;
+}
+//--------------------------------------------------------------------------
+//
 // FUNC P_GiveAmmo
 //
 // Returns true if the player accepted the ammo, false if it was
@@ -164,7 +181,8 @@ boolean P_GiveAmmo(player_t * player, ammotype_t ammo, int count)
     {
         return (false);
     }
-    if (gameskill == sk_baby || gameskill == sk_nightmare)
+    if (gameskill == sk_baby || gameskill == sk_nightmare
+                             || critical->moreammo)
     {                           // extra ammo in baby mode and nightmare mode
         count += count >> 1;
     }
@@ -217,6 +235,20 @@ boolean P_GiveAmmo(player_t * player, ammotype_t ammo, int count)
 //
 //--------------------------------------------------------------------------
 
+// [crispy] show weapon pickup messages in multiplayer games
+const char *const WeaponPickupMessages[NUMWEAPONS] =
+{
+    NULL, // wp_staff
+    NULL, // wp_goldwand
+    TXT_WPNCROSSBOW,
+    TXT_WPNBLASTER,
+    TXT_WPNSKULLROD,
+    TXT_WPNPHOENIXROD,
+    TXT_WPNMACE,
+    TXT_WPNGAUNTLETS,
+    NULL // wp_beak
+};
+
 boolean P_GiveWeapon(player_t * player, weapontype_t weapon)
 {
     boolean gaveAmmo;
@@ -232,6 +264,10 @@ boolean P_GiveWeapon(player_t * player, weapontype_t weapon)
         player->weaponowned[weapon] = true;
         P_GiveAmmo(player, wpnlev1info[weapon].ammo, GetWeaponAmmo[weapon]);
         player->pendingweapon = weapon;
+
+        // [crispy] show weapon pickup messages in multiplayer games
+        P_SetMessage(player, DEH_String(WeaponPickupMessages[weapon]), false);
+
         if (player == &players[consoleplayer])
         {
             S_StartSound(NULL, sfx_wpnup);
@@ -469,6 +505,7 @@ boolean P_GiveArtifact(player_t * player, artitype_t arti, mobj_t * mo)
 void P_SetDormantArtifact(mobj_t * arti)
 {
     arti->flags &= ~MF_SPECIAL;
+    arti->flags |= MF_TRANSLUCENT; // [crispy] artifact pickup translucent
     if (deathmatch && (arti->type != MT_ARTIINVULNERABILITY)
         && (arti->type != MT_ARTIINVISIBILITY))
     {
@@ -489,6 +526,7 @@ void P_SetDormantArtifact(mobj_t * arti)
 
 void A_RestoreArtifact(mobj_t * arti, player_t *player, pspdef_t *psp)
 {
+    arti->flags &= ~MF_TRANSLUCENT; // [crispy] artifact respawn opaque
     arti->flags |= MF_SPECIAL;
     P_SetMobjState(arti, arti->info->spawnstate);
     S_StartSound(arti, sfx_respawn);
@@ -502,6 +540,7 @@ void A_RestoreArtifact(mobj_t * arti, player_t *player, pspdef_t *psp)
 
 void P_HideSpecialThing(mobj_t * thing)
 {
+    thing->flags |= MF_TRANSLUCENT; // [crispy] special translucent
     thing->flags &= ~MF_SPECIAL;
     thing->flags2 |= MF2_DONTDRAW;
     P_SetMobjState(thing, S_HIDESPECIAL1);
@@ -533,6 +572,7 @@ void A_RestoreSpecialThing1(mobj_t * thing, player_t *player, pspdef_t *psp)
 
 void A_RestoreSpecialThing2(mobj_t * thing, player_t *player, pspdef_t *psp)
 {
+    thing->flags &= ~MF_TRANSLUCENT; // [crispy] thing respawn opaque
     thing->flags |= MF_SPECIAL;
     P_SetMobjState(thing, thing->info->spawnstate);
 }
@@ -875,7 +915,6 @@ void P_TouchSpecialThing(mobj_t * special, mobj_t * toucher)
     if (player == &players[consoleplayer])
     {
         S_StartSound(NULL, sound);
-        SB_PaletteFlash();
     }
 }
 
@@ -940,6 +979,11 @@ void P_KillMobj(mobj_t * source, mobj_t * target)
             return;
         }
     }
+
+    // [crispy] Exploding Goo-Pods are translucent
+    if (target->type == MT_POD)
+        target->flags |= MF_TRANSLUCENT;
+
     if (target->health < -(target->info->spawnhealth >> 1)
         && target->info->xdeathstate)
     {                           // Extreme death
@@ -1175,7 +1219,7 @@ void P_AutoUseHealth(player_t * player, int saveHealth)
             superCount = player->inventory[i].count;
         }
     }
-    if ((gameskill == sk_baby) && (normalCount * 25 >= saveHealth))
+    if ((gameskill == sk_baby || critical->autohealth) && (normalCount * 25 >= saveHealth))
     {                           // Use quartz flasks
         count = (saveHealth + 24) / 25;
         for (i = 0; i < count; i++)
@@ -1193,7 +1237,7 @@ void P_AutoUseHealth(player_t * player, int saveHealth)
             P_PlayerRemoveArtifact(player, superSlot);
         }
     }
-    else if ((gameskill == sk_baby)
+    else if ((gameskill == sk_baby || critical->autohealth)
              && (superCount * 100 + normalCount * 25 >= saveHealth))
     {                           // Use mystic urns and quartz flasks
         count = (saveHealth + 24) / 25;
@@ -1419,7 +1463,8 @@ void P_DamageMobj
             damage -= saved;
         }
         if (damage >= player->health
-            && ((gameskill == sk_baby) || deathmatch) && !player->chickenTics)
+            && ((gameskill == sk_baby) || deathmatch || critical->autohealth)
+            && !player->chickenTics)
         {                       // Try to use some inventory health
             P_AutoUseHealth(player, damage - player->health + 1);
         }
@@ -1438,7 +1483,6 @@ void P_DamageMobj
         if (player == &players[consoleplayer])
         {
             I_Tactile(40, 10, 40 + temp * 2);
-            SB_PaletteFlash();
         }
     }
 

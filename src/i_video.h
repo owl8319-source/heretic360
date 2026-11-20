@@ -21,15 +21,31 @@
 #define __I_VIDEO__
 
 #include "doomtype.h"
+#include "i_truecolor.h"
+#include "m_fixed.h" // [crispy] fixed_t
+#include "crispy.h"
 
 // Screen width and height.
 
-#define SCREENWIDTH  320
-#define SCREENHEIGHT 200
+#define ORIGWIDTH  320 // [crispy]
+#define ORIGHEIGHT 200 // [crispy]
+
+#define MAXWIDTH  (ORIGWIDTH << 2) // [crispy]
+#define MAXHEIGHT (ORIGHEIGHT << 1) // [crispy]
+
+extern int SCREENWIDTH;
+extern int SCREENHEIGHT;
+extern int NONWIDEWIDTH; // [crispy] non-widescreen SCREENWIDTH
+extern int WIDESCREENDELTA; // [crispy] horizontal widescreen offset
+void I_GetScreenDimensions (void); // [crispy] re-calculate WIDESCREENDELTA
+void I_ToggleVsync (void); // [crispy] calls native SDL vsync toggle
 
 // Screen height used when aspect_ratio_correct=true.
 
-#define SCREENHEIGHT_4_3 240
+#define ORIGHEIGHT_4_3 240 // [crispy]
+#define MAXHEIGHT_4_3 (ORIGHEIGHT_4_3 << 1) // [crispy]
+
+extern int SCREENHEIGHT_4_3;
 
 typedef boolean (*grabmouse_callback_t)(void);
 
@@ -43,8 +59,18 @@ void I_GraphicsCheckCommandLine(void);
 void I_ShutdownGraphics(void);
 
 // Takes full 8 bit values.
+#ifndef CRISPY_TRUECOLOR
 void I_SetPalette (byte* palette);
 int I_GetPaletteIndex(int r, int g, int b);
+#else
+void I_SetPalette (int palette);
+extern const pixel_t I_MapRGB (const uint8_t r, const uint8_t g, const uint8_t b);
+#endif
+
+extern byte gamma2table[18][256];
+void I_SetGammaTable (void);
+
+extern fixed_t fractionaltic;
 
 void I_UpdateNoBlit (void);
 void I_FinishUpdate (void);
@@ -74,6 +100,9 @@ void I_StartFrame (void);
 // Quick syncronous operations are performed here.
 
 void I_StartTic (void);
+
+void I_UpdateFracTic (void); // [crispy]
+void I_StartDisplay (void); // [crispy]
 
 // Enable the loading disk image displayed when reading from disk.
 

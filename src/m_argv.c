@@ -416,7 +416,7 @@ static int GuessFileType(const char *name)
         }
     }
     else if (M_StringEndsWith(lower, ".deh") ||
-//           M_StringEndsWith(lower, ".bex") ||
+             M_StringEndsWith(lower, ".bex") || // [crispy] *.bex
              M_StringEndsWith(lower, ".hhe") ||
              M_StringEndsWith(lower, ".seh"))
     {

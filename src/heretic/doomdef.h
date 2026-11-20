@@ -190,6 +190,16 @@ typedef struct mobj_s
     int lastlook;               // player number last looked for
 
     mapthing_t spawnpoint;      // for nightmare respawn
+
+    // [AM] If true, ok to interpolate this tic.
+    int                 interp;
+
+    // [AM] Previous position of mobj before think.
+    //      Used to interpolate between positions.
+    fixed_t		oldx;
+    fixed_t		oldy;
+    fixed_t		oldz;
+    angle_t		oldangle;
 } mobj_t;
 
 // each sector has a degenmobj_t in it's center for sound origin purposes
@@ -244,6 +254,7 @@ typedef struct
 
 #define	MF_TRANSLATION	0xc000000 // if 0x4 0x8 or 0xc, use a translation
 #define	MF_TRANSSHIFT	26      // table for player colormaps
+#define MF_TRANSLUCENT  0x80000000 // [crispy] translucent sprite
 
 // --- mobj.flags2 ---
 
@@ -298,6 +309,7 @@ typedef struct pspdef_s
     state_t *state;             // a NULL state means not active
     int tics;
     fixed_t sx, sy;
+    fixed_t sx2, sy2; // [crispy] variable weapon sprite bob
 } pspdef_t;
 
 typedef enum
@@ -431,7 +443,7 @@ typedef struct player_s
     fixed_t bob;                // bounded/scaled total momentum
 
     int flyheight;
-    int lookdir;
+    int lookdir, oldlookdir;
     boolean centering;
     int health;                 // only used between levels, mo->health
     // is used during levels
@@ -470,13 +482,26 @@ typedef struct player_s
     int chickenPeck;            // chicken peck countdown
     mobj_t *rain1;              // active rain maker 1
     mobj_t *rain2;              // active rain maker 2
+
+    // [crispy] show centered "Secret Revealed!" message
+    const char *centerMessage;
+    int centerMessageTics;            // counter for showing centered messages
+
+    // [AM] Previous position of viewz before think.
+    //      Used to interpolate between camera positions.
+    fixed_t		oldviewz;
+
+    // [crispy] variable player view bob
+    fixed_t bob2;
 } player_t;
 
 #define CF_NOCLIP		1
 #define	CF_GODMODE		2
 #define	CF_NOMOMENTUM	4       // not really a cheat, just a debug aid
+#define CF_SHOWFPS      8       // [crispy] "Cheat" to show FPS
+#define CF_NOTARGET     16      // [crispy] toggle notarget mode: monsters don't target player
 
-#define	SBARHEIGHT	42      // status bar height at bottom of screen
+#define	SBARHEIGHT	(42 << crispy->hires)      // status bar height at bottom of screen
 
 
 /*
@@ -506,6 +531,8 @@ extern boolean debugmode;       // checkparm of -debug
 extern boolean usergame;        // ok to save / end game
 
 extern boolean ravpic;          // checkparm of -ravpic
+
+extern boolean coop_spawns;     // [crispy] checkparm of -coop_spawns
 
 extern boolean altpal;          // checkparm to use an alternate palette routine
 
@@ -551,10 +578,13 @@ extern int prevmap;
 extern int totalkills, totalitems, totalsecret; // for intermission
 extern int levelstarttic;       // gametic at level start
 extern int leveltime;           // tics in game play for par
+extern int totalleveltimes; // [crispy] total time for all completed levels
+
+extern boolean finalintermission; // [crispy] track intermission at end of episode
 
 extern ticcmd_t *netcmds;
 
-#define SAVEGAMESIZE 0x30000
+#define SAVEGAMESIZE 0x30000*16
 #define SAVESTRINGSIZE 24
 
 extern mapthing_t *deathmatch_p;
@@ -563,6 +593,8 @@ extern mapthing_t playerstarts[MAXPLAYERS];
 extern boolean playerstartsingame[MAXPLAYERS];
 
 extern int mouseSensitivity;
+extern int mouseSensitivity_x2;
+extern int mouseSensitivity_y;
 
 extern boolean precache;        // if true, load all graphics at level load
 
@@ -575,11 +607,15 @@ extern int startmap;
 extern boolean autostart;
 extern boolean advancedemo;
 
+extern  boolean nodrawers; // [crispy] for the demowarp feature
+
 extern boolean testcontrols;
 extern int testcontrols_mousespeed;
 
 extern int vanilla_savegame_limit;
 extern int vanilla_demo_limit;
+
+extern FILE *SaveGameFP; // [crispy] for usage in extsavg
 
 /*
 ===============================================================================
@@ -692,6 +728,11 @@ uint32_t SV_ReadLong(void);
 
 extern char *savegamedir;
 
+// [crispy] support up to 8 pages of savegames
+extern int savepage;
+#define SAVES_PER_PAGE 6
+#define SAVEPAGE_MAX 7
+
 void G_RecordDemo(skill_t skill, int numplayers, int episode, int map,
                   const char *name);
 // only called by startup code
@@ -712,6 +753,8 @@ void G_BuildTiccmd(ticcmd_t *cmd, int maketic);
 
 void G_Ticker(void);
 boolean G_Responder(event_t * ev);
+void G_FastResponder(void); // [crispy]
+void G_PrepTiccmd(void); // [crispy]
 
 void G_ScreenShot(void);
 
@@ -721,10 +764,15 @@ void G_ScreenShot(void);
 
 extern lumpinfo_t *maplumpinfo;
 
+extern int init_thinkers_count;
+
 void P_Ticker(void);
 // called by C_Ticker
 // can call G_PlayerExited
 // carries out all thinking of monsters and players
+
+// [crispy] (re-)create BLOCKMAP if necessary
+void P_CreateBlockMap(void);
 
 void P_SetupLevel(int episode, int map, int playermask, skill_t skill);
 // called by W_Ticker
@@ -740,6 +788,7 @@ void P_ArchiveThinkers(void);
 void P_UnArchiveThinkers(void);
 void P_ArchiveSpecials(void);
 void P_UnArchiveSpecials(void);
+void P_RestoreTargets(void);
 // load / save game routines
 
 
@@ -823,6 +872,7 @@ void F_StartFinale(void);
 // STATUS BAR (SB_bar.c)
 //----------------------
 
+#define CURPOS_MAX 6 // [crispy] 7 total artifact frames
 
 extern boolean inventory;
 extern int curpos;

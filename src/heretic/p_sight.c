@@ -91,7 +91,7 @@ boolean PTR_SightTraverse(intercept_t * in)
 boolean P_SightBlockLinesIterator(int x, int y)
 {
     int offset;
-    short *list;
+    int32_t *list; // [crispy] BLOCKMAP limit
     line_t *ld;
     int s1, s2;
     divline_t dl;
@@ -99,6 +99,10 @@ boolean P_SightBlockLinesIterator(int x, int y)
     offset = y * bmapwidth + x;
 
     offset = *(blockmap + offset);
+
+    // Invalid block, ignore this one
+    if (offset < 0)
+        return true;
 
     for (list = blockmaplump + offset; *list != -1; list++)
     {
@@ -123,6 +127,7 @@ boolean P_SightBlockLinesIterator(int x, int y)
             return false;       // stop checking
 
         // store the line for later intersection testing
+        check_intercept(); // [crispy] remove INTERCEPTS limit
         intercept_p->d.line = ld;
         intercept_p++;
 

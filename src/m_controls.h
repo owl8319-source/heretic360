@@ -19,17 +19,25 @@
  
 extern int key_right;
 extern int key_left;
+extern int key_reverse;
 
 extern int key_up;
+extern int key_alt_up;
 extern int key_down;
+extern int key_alt_down;
 extern int key_strafeleft;
+extern int key_alt_strafeleft;
 extern int key_straferight;
+extern int key_alt_straferight;
 extern int key_fire;
 extern int key_use;
 extern int key_strafe;
 extern int key_speed;
+extern int key_demospeed;  // [crispy]
 
 extern int key_jump;
+extern int key_toggleautorun;
+extern int key_togglenovert;
  
 extern int key_flyup;
 extern int key_flydown;
@@ -104,6 +112,8 @@ extern int key_map_follow;
 extern int key_map_grid;
 extern int key_map_mark;
 extern int key_map_clearmark;
+extern int key_map_overlay;
+extern int key_map_rotate;
 
 // menu keys:
 
@@ -132,6 +142,10 @@ extern int key_menu_gamma;
 extern int key_menu_incscreen;
 extern int key_menu_decscreen;
 extern int key_menu_screenshot;
+extern int key_menu_cleanscreenshot; // [crispy]
+extern int key_menu_del; // [crispy]
+extern int key_menu_nextlevel; // [crispy]
+extern int key_menu_reloadlevel; // [crispy]
 
 extern int mousebfire;
 extern int mousebstrafe;
@@ -146,12 +160,20 @@ extern int mousebturnleft;
 extern int mousebturnright;
 extern int mousebbackward;
 extern int mousebuse;
+extern int mousebmouselook;
+extern int mousebreverse;
 
 extern int mousebprevweapon;
 extern int mousebnextweapon;
 extern int mousebinvleft;
 extern int mousebinvright;
 extern int mousebuseartifact;
+extern int mousebinvuse; // [crispy]
+
+extern int mousebmapzoomin; // [crispy]
+extern int mousebmapzoomout; // [crispy]
+extern int mousebmapmaxzoom; // [crispy]
+extern int mousebmapfollow; // [crispy]
 
 extern int joybfire;
 extern int joybstrafe;

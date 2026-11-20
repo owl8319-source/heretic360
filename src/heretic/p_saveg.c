@@ -23,12 +23,15 @@
 #include "i_system.h"
 #include "m_misc.h"
 #include "p_local.h"
+#include "p_mapformat.h"
 #include "v_video.h"
+#include "a11y.h"
 
-static FILE *SaveGameFP;
+FILE *SaveGameFP;
 
 int vanilla_savegame_limit = 1;
 
+int savepage; // [crispy]
 
 //==========================================================================
 //
@@ -47,7 +50,8 @@ char *SV_Filename(int slot)
     filename_len = strlen(savegamedir) + strlen(SAVEGAMENAME) + 8;
     filename = malloc(filename_len);
     M_snprintf(filename, filename_len,
-               "%s" SAVEGAMENAME "%d.hsg", savegamedir, slot);
+               "%s" SAVEGAMENAME "%d.hsg", savegamedir,
+               SAVES_PER_PAGE * savepage + slot);
 
     return filename;
 }
@@ -339,6 +343,10 @@ static void saveg_read_pspdef_t(pspdef_t *str)
     // fixed_t sx, sy;
     str->sx = SV_ReadLong();
     str->sy = SV_ReadLong();
+
+    // [crispy] variable weapon sprite bob
+    str->sx2 = str->sx;
+    str->sy2 = str->sy;
 }
 
 static void saveg_write_pspdef_t(pspdef_t *str)
@@ -384,6 +392,9 @@ static void saveg_read_player_t(player_t *str)
 
     // fixed_t bob;
     str->bob = SV_ReadLong();
+
+    // [crispy] variable player view bob
+    str->bob2 = str->bob;
 
     // int flyheight;
     str->flyheight = SV_ReadLong();
@@ -907,8 +918,7 @@ static void saveg_read_mobj_t(mobj_t *str)
     str->movecount = SV_ReadLong();
 
     // struct mobj_s *target;
-    SV_ReadLong();
-    str->target = NULL;
+    str->target = (void *)(uintptr_t) SV_ReadLong();
 
     // int reactiontime;
     str->reactiontime = SV_ReadLong();
@@ -933,6 +943,53 @@ static void saveg_read_mobj_t(mobj_t *str)
 
     // mapthing_t spawnpoint;
     saveg_read_mapthing_t(&str->spawnpoint);
+}
+
+// [crispy] enumerate all thinker pointers
+static uint32_t P_ThinkerToIndex (const thinker_t *thinker)
+{
+    thinker_t *th;
+    uint32_t i;
+
+    if (!thinker)
+	return 0;
+
+    for (th = thinkercap.next, i = 0; th != &thinkercap; th = th->next)
+    {
+	if (th->function == P_MobjThinker)
+	{
+	    i++;
+	    if (th == thinker)
+		return i;
+	}
+    }
+
+    return 0;
+}
+
+// [crispy] replace indices with corresponding pointers
+static int restoretargets_fail = 0;
+static const thinker_t *P_IndexToThinker (uint32_t index)
+{
+    thinker_t *th;
+    uint32_t i;
+
+    if (!index)
+	return NULL;
+
+    for (th = thinkercap.next, i = 0; th != &thinkercap; th = th->next)
+    {
+	if (th->function == P_MobjThinker)
+	{
+	    i++;
+	    if (i == index)
+		return th;
+	}
+    }
+
+    restoretargets_fail++;
+
+    return NULL;
 }
 
 static void saveg_write_mobj_t(mobj_t *str)
@@ -1035,7 +1092,7 @@ static void saveg_write_mobj_t(mobj_t *str)
     SV_WriteLong(str->movecount);
 
     // struct mobj_s *target;
-    SV_WritePtr(str->target);
+    SV_WritePtr((void *)(uintptr_t) P_ThinkerToIndex((const thinker_t *) str->target));
 
     // int reactiontime;
     SV_WriteLong(str->reactiontime);
@@ -1376,6 +1433,9 @@ static void saveg_read_lightflash_t(lightflash_t *str)
 
     // int mintime;
     str->mintime = SV_ReadLong();
+
+    if (!a11y_sector_lighting)
+        str->sector->rlightlevel = str->maxlight;
 }
 
 static void saveg_write_lightflash_t(lightflash_t *str)
@@ -1432,6 +1492,10 @@ static void saveg_read_strobe_t(strobe_t *str)
 
     // int brighttime;
     str->brighttime = SV_ReadLong();
+
+    if (!a11y_sector_lighting && 
+            str->sector->rlightlevel < str->maxlight) // [crispy] Ensure maxlight among competing thinkers. 
+        str->sector->rlightlevel = str->maxlight;
 }
 
 static void saveg_write_strobe_t(strobe_t *str)
@@ -1482,6 +1546,9 @@ static void saveg_read_glow_t(glow_t *str)
 
     // int direction;
     str->direction = SV_ReadLong();
+
+    if (!a11y_sector_lighting)
+        str->sector->rlightlevel = str->maxlight;
 }
 
 static void saveg_write_glow_t(glow_t *str)
@@ -1586,7 +1653,7 @@ void P_ArchiveWorld(void)
         SV_WriteWord(li->tag);
         for (j = 0; j < 2; j++)
         {
-            if (li->sidenum[j] == -1)
+            if (li->sidenum[j] == NO_INDEX) // [crispy] extended nodes
             {
                 continue;
             }
@@ -1620,15 +1687,27 @@ void P_UnArchiveWorld(void)
 //
     for (i = 0, sec = sectors; i < numsectors; i++, sec++)
     {
+        // [crispy] add overflow guard for the flattranslation[] array
+        short floorpic, ceilingpic;
         sec->floorheight = SV_ReadWord() << FRACBITS;
         sec->ceilingheight = SV_ReadWord() << FRACBITS;
-        sec->floorpic = SV_ReadWord();
-        sec->ceilingpic = SV_ReadWord();
+        floorpic = SV_ReadWord();
+        ceilingpic = SV_ReadWord();
         sec->lightlevel = SV_ReadWord();
+        sec->rlightlevel = sec->lightlevel; // [crispy] A11Y
         sec->special = SV_ReadWord();  // needed?
         sec->tag = SV_ReadWord();      // needed?
         sec->specialdata = 0;
         sec->soundtarget = 0;
+        // [crispy] add overflow guard for the flattranslation[] array
+        if (floorpic >= 0 && floorpic < numflats)
+        {
+            sec->floorpic = floorpic;
+        }
+        if (ceilingpic >= 0 && ceilingpic < numflats)
+        {
+            sec->ceilingpic = ceilingpic;
+        }
     }
 
 //
@@ -1641,7 +1720,7 @@ void P_UnArchiveWorld(void)
         li->tag = SV_ReadWord();
         for (j = 0; j < 2; j++)
         {
-            if (li->sidenum[j] == -1)
+            if (li->sidenum[j] == NO_INDEX) // [crispy] extended nodes
                 continue;
             si = &sides[li->sidenum[j]];
             si->textureoffset = SV_ReadWord() << FRACBITS;
@@ -1728,7 +1807,7 @@ void P_UnArchiveThinkers(void)
             case tc_mobj:
                 mobj = Z_Malloc(sizeof(*mobj), PU_LEVEL, NULL);
                 saveg_read_mobj_t(mobj);
-                mobj->target = NULL;
+//              mobj->target = NULL;
                 P_SetThingPosition(mobj);
                 mobj->info = &mobjinfo[mobj->type];
                 mobj->floorz = mobj->subsector->sector->floorheight;
@@ -1747,6 +1826,28 @@ void P_UnArchiveThinkers(void)
 
 //=============================================================================
 
+// [crispy] after all the thinkers have been restored, replace all indices in
+// the mobj->target fields by the corresponding current pointers again
+void P_RestoreTargets (void)
+{
+    mobj_t *mo;
+    thinker_t *th;
+
+    restoretargets_fail = 0;
+    for (th = thinkercap.next; th != &thinkercap; th = th->next)
+    {
+	if (th->function == P_MobjThinker)
+	{
+	    mo = (mobj_t *) th;
+	    mo->target = (mobj_t *) P_IndexToThinker((uintptr_t) mo->target);
+	}
+    }
+
+    if (restoretargets_fail)
+    {
+	fprintf (stderr, "P_RestoreTargets: Failed to restore %d target pointers.\n", restoretargets_fail);
+    }
+}
 
 /*
 ====================

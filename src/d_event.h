@@ -109,6 +109,8 @@ typedef enum
     BTS_SAVEMASK	= (4+8+16),
     BTS_SAVESHIFT 	= 2,
   
+    // [crispy] demo joined.
+    BT_JOIN = 64
 } buttoncode_t;
 
 // villsa [STRIFE] Strife specific buttons
@@ -133,7 +135,10 @@ typedef enum
 } buttoncode2_t;
 
 
+// [crispy] For fast polling
+extern event_t fastmouse;
 
+extern boolean newfastmouse;
 
 // Called by IO functions when input is detected.
 void D_PostEvent (event_t *ev);

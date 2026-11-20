@@ -1,12 +1,12 @@
 // Heretic 360: the Xbox 360 controller, read through SDL3 (SDL-xenon reads it with XamInputGetState), posted to the
-// game as Chocolate Doom's ev_joystick events with a fixed layout:
+// game as Crispy Doom's ev_joystick events with a fixed layout:
 //
 //   In the game                          In the menus
 //   Left stick    move and strafe        Left stick, D-pad  choose
 //   Right stick   turn and look          A                  select (yes, on the quit question)
 //   RT            fire                   B                  back (no, on the quit question)
 //   LT or A       use (doors, switches)  Start              open the menu
-//   LB / RB       previous / next weapon
+//   LB / RB       previous / next weapon LB / RB            previous / next page
 //   D-pad left / right  inventory        The game always runs; push the stick part way to walk.
 //   D-pad up or X  use the artifact
 //   Y / B         fly up / down (Wings of Wrath)
@@ -211,9 +211,12 @@ static int ButtonState(void)
 
     if (MenuActive || askforquit || DM_Active)
     {
-        // The menus read fire as select and use as back.
+        // The menus read fire as select, use as back, and the weapon buttons as the page buttons: LB / RB turn the
+        // save and load screens' pages and Crispy's option pages (heretic/mn_menu.c).
         if (Pressed(SDL_GAMEPAD_BUTTON_SOUTH)) SET(VB_FIRE);
         if (Pressed(SDL_GAMEPAD_BUTTON_EAST)) SET(VB_USE);
+        if (!bumpers && Pressed(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)) SET(VB_PREV_WEAPON);
+        if (!bumpers && Pressed(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) SET(VB_NEXT_WEAPON);
         return buttons;
     }
 

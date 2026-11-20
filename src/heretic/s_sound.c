@@ -40,6 +40,7 @@
 
 void S_ShutDown(void);
 boolean S_StopSoundID(int sound_id, int priority);
+static void S_LevelWeaponSound(mobj_t *origin, int sound_id, int *vol); // [crispy] level weapon sounds
 
 static channel_t channel[MAX_CHANNELS];
 
@@ -51,7 +52,7 @@ byte *soundCurve;
 
 int snd_MaxVolume = 10;
 int snd_MusicVolume = 10;
-int snd_Channels = 16;
+int snd_Channels = 8;
 
 int AmbChan;
 
@@ -69,14 +70,14 @@ void S_Start(void)
             S_StopSound(channel[i].mo);
         }
     }
-    memset(channel, 0, 8 * sizeof(channel_t));
+    memset(channel, 0, snd_Channels * sizeof(channel_t));
 }
 
 void S_StartSong(int song, boolean loop)
 {
     int mus_len;
 
-    if (song == mus_song)
+    if (song == mus_song || (nodrawers && singletics))
     {                           // don't replay an old song
         return;
     }
@@ -91,7 +92,15 @@ void S_StartSong(int song, boolean loop)
     {
         return;
     }
-    mus_lumpnum = W_GetNumForName(S_music[song].name);
+    // [crispy] support dedicated music tracks for each map
+    if (S_music[song][1].name && W_CheckNumForName(S_music[song][1].name) > 0)
+    {
+        mus_lumpnum = (W_GetNumForName(S_music[song][1].name));
+    }
+    else
+    {
+        mus_lumpnum = (W_GetNumForName(S_music[song][0].name));
+    }
     mus_sndptr = W_CacheLumpNum(mus_lumpnum, PU_MUSIC);
     mus_len = W_LumpLength(mus_lumpnum);
     rs = I_RegisterSong(mus_sndptr, mus_len);
@@ -137,7 +146,7 @@ void S_StartSound(void *_origin, int sound_id)
 
     listener = GetSoundListener();
 
-    if (sound_id == 0 || snd_MaxVolume == 0)
+    if (sound_id == 0 || snd_MaxVolume == 0 || (nodrawers && singletics))
         return;
     if (origin == NULL)
     {
@@ -252,7 +261,13 @@ void S_StartSound(void *_origin, int sound_id)
 //      vol = (snd_MaxVolume*16 + dist*(-snd_MaxVolume*16)/MAX_SND_DIST)>>9;
     vol = soundCurve[dist];
 
-    if (origin == listener)
+    // [crispy] apply weapon sound leveling
+    if(crispy->lvlwpnsnd)
+    {
+        S_LevelWeaponSound(origin, sound_id, &vol);
+    }
+
+    if (origin == listener || crispy->soundmono)
     {
         sep = 128;
     }
@@ -287,6 +302,30 @@ void S_StartSound(void *_origin, int sound_id)
     }
 }
 
+static void S_LevelWeaponSound(mobj_t *origin, int sound_id, int *vol)
+{
+    // [crispy] only apply if origin is active player
+    if(&players[consoleplayer] == origin->player)
+    {
+        // [crispy] base is snd_MaxVolume, used to generate soundCurve values
+        switch (sound_id)
+        {     
+            case sfx_gntuse:
+            case sfx_gntact:
+                // [crispy] lower gauntlet sfx
+                *vol -= snd_MaxVolume * 3;
+                break;
+            case sfx_blshit:
+            case sfx_blssht:
+            case sfx_gldhit:
+                // [crispy] lower dragonclaw sfx
+                if (viewplayer->readyweapon == wp_blaster)
+                    *vol -= snd_MaxVolume * 3;
+                break;
+        }        
+    }
+}
+
 void S_StartSoundAtVolume(void *_origin, int sound_id, int volume)
 {
     mobj_t *origin = _origin;
@@ -295,7 +334,7 @@ void S_StartSoundAtVolume(void *_origin, int sound_id, int volume)
 
     listener = GetSoundListener();
 
-    if (sound_id == 0 || snd_MaxVolume == 0)
+    if (sound_id == 0 || snd_MaxVolume == 0 || (nodrawers && singletics))
         return;
     if (origin == NULL)
     {
@@ -494,14 +533,21 @@ void S_UpdateSounds(mobj_t * listener)
 //          vol = (*((byte *)W_CacheLumpName("SNDCURVE", PU_CACHE)+dist)*(snd_MaxVolume*8))>>7;
             vol = soundCurve[dist];
 
-            angle = R_PointToAngle2(listener->x, listener->y,
-                                    channel[i].mo->x, channel[i].mo->y);
-            angle = (angle - viewangle) >> 24;
-            sep = angle * 2 - 128;
-            if (sep < 64)
-                sep = -sep;
-            if (sep > 192)
-                sep = 512 - sep;
+            if (crispy->soundmono)
+            {
+                sep = 128;
+            }
+            else
+            {
+                angle = R_PointToAngle2(listener->x, listener->y,
+                                        channel[i].mo->x, channel[i].mo->y);
+                angle = (angle - viewangle) >> 24;
+                sep = angle * 2 - 128;
+                if (sep < 64)
+                    sep = -sep;
+                if (sep > 192)
+                    sep = 512 - sep;
+            }
             // TODO: Pitch shifting.
             I_UpdateSoundParams(channel[i].handle, vol, sep);
             priority = S_sfx[channel[i].sound_id].priority;
@@ -515,10 +561,21 @@ void S_Init(void)
 {
     I_SetOPLDriverVer(opl_doom2_1_666);
     soundCurve = Z_Malloc(MAX_SND_DIST, PU_STATIC, NULL);
-    if (snd_Channels > 8)
+
+    // [crispy] snd_Channels must be 8, 16 or 32
+    if (snd_Channels > MAX_CHANNELS)
+    {
+        snd_Channels = MAX_CHANNELS;
+    }
+    else if (snd_Channels < 16)
     {
         snd_Channels = 8;
     }
+    else if (snd_Channels < 32)
+    {
+        snd_Channels = 16;
+    }
+
     I_SetMusicVolume(snd_MusicVolume * 8);
     S_SetMaxVolume(true);
 
@@ -603,5 +660,29 @@ void S_ShutDown(void)
     I_StopSong();
     I_UnRegisterSong(rs);
     I_ShutdownSound();
+}
+
+// [crispy] variable number of sound channels
+void S_UpdateSndChannels (int option)
+{
+    int i;
+
+    for (i = 0; i < snd_Channels; i++)
+    {
+        if (channel[i].handle)
+            S_StopSound(channel[i].mo);
+    }
+
+    if (option)
+        snd_Channels <<= 1;
+    else
+        snd_Channels >>= 1;
+
+    if (snd_Channels > 32)
+        snd_Channels = 8;
+    else if (snd_Channels < 8)
+        snd_Channels = 32;
+
+    memset(channel, 0, snd_Channels * sizeof(channel_t));
 }
 

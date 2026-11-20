@@ -349,7 +349,7 @@ static unsigned int last_perc_count;
 // Configuration file variable, containing the port number for the
 // adlib chip.
 
-char *snd_dmxoption = "";
+char *snd_dmxoption = "-opl3"; // [crispy] default to OPL3 emulation
 int opl_io_port = 0x388;
 
 // If true, OPL sound channels are reversed to their correct arrangement
@@ -1599,17 +1599,14 @@ static void I_OPL_UnRegisterSong(void *handle)
         return;
     }
 
+    OPL_Lock();
+
     if (handle != NULL)
     {
         MIDI_FreeFile(handle);
     }
-}
 
-// Determine whether memory block is a .mid file
-
-static boolean IsMid(byte *mem, int len)
-{
-    return len > 4 && !memcmp(mem, "MThd", 4);
+    OPL_Unlock();
 }
 
 static boolean ConvertMus(byte *musdata, int len, char *filename)
@@ -1650,7 +1647,7 @@ static void *I_OPL_RegisterSong(void *data, int len)
 
 #ifdef HERETIC360
     // Heretic 360: the song converted in memory and read from there, with no temporary file on the hard drive.
-    if (IsMid(data, len) && len < MAXMIDLENGTH)
+    if (IsMid(data, len))
     {
         result = MIDI_LoadMemory(data, len);
     }
@@ -1681,12 +1678,15 @@ static void *I_OPL_RegisterSong(void *data, int len)
     fprintf(stderr, "I_OPL_RegisterSong: couldn't read the song in memory, trying a file\n");
 #endif
 
+    OPL_Lock();
+
     // MUS files begin with "MUS"
     // Reject anything which doesnt have this signature
 
     filename = M_TempFile("doom.mid");
 
-    if (IsMid(data, len) && len < MAXMIDLENGTH)
+    // [crispy] remove MID file size limit
+    if (IsMid(data, len) /* && len < MAXMIDLENGTH */)
     {
         M_WriteFile(filename, data, len);
     }
@@ -1708,6 +1708,8 @@ static void *I_OPL_RegisterSong(void *data, int len)
 
     M_remove(filename);
     free(filename);
+
+    OPL_Unlock();
 
     return result;
 }

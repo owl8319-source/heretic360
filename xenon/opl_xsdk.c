@@ -106,7 +106,7 @@ static void AdvanceTime(unsigned int nsamples)
 // Adds the chip's next nsamples stereo frames into the mix.
 static void AddChipOutput(int32_t *mix, unsigned int nsamples)
 {
-    static Bit16s chip_buffer[MAX_GENERATE_FRAMES * 2];
+    static int16_t chip_buffer[MAX_GENERATE_FRAMES * 2];
 
     OPL3_GenerateStream(&opl_chip, chip_buffer, nsamples);
 
@@ -216,7 +216,7 @@ static int OPL_XSDK_Init(unsigned int port_base)
         return 0;
     }
 
-    OPL3_Reset(&opl_chip, (Bit32u) mixing_freq);
+    OPL3_Reset(&opl_chip, (uint32_t) mixing_freq);
     opl_opl3mode = 0;
 
     if (!I_SetMusicGenerator(OPL_XSDK_Generate))
@@ -308,7 +308,7 @@ static void WriteRegister(unsigned int reg_num, unsigned int value)
             // Falls through: the chip takes it too.
 
         default:
-            OPL3_WriteRegBuffered(&opl_chip, (Bit16u) reg_num, (Bit8u) value);
+            OPL3_WriteRegBuffered(&opl_chip, (uint16_t) reg_num, (uint8_t) value);
             break;
     }
 }

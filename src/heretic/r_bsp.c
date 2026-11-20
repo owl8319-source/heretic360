@@ -20,13 +20,15 @@
 #include "m_bbox.h"
 #include "i_system.h"
 #include "r_local.h"
+#include "p_mapformat.h" // [crispy] support extended node formats
 
 seg_t *curline;
 side_t *sidedef;
 line_t *linedef;
 sector_t *frontsector, *backsector;
 
-drawseg_t drawsegs[MAXDRAWSEGS], *ds_p;
+drawseg_t *drawsegs = NULL, *ds_p;
+int numdrawsegs = 0;
 
 void R_StoreWallRange(int start, int stop);
 
@@ -67,7 +69,7 @@ typedef struct
 // render overage and then bomb out by detecting the overflow after the 
 // fact. -haleyjd
 //#define MAXSEGS 32
-#define MAXSEGS (SCREENWIDTH / 2 + 1)
+#define MAXSEGS (MAXWIDTH / 2 + 1)
 
 cliprange_t solidsegs[MAXSEGS], *newend;        // newend is one past the last valid seg
 
@@ -200,6 +202,33 @@ void R_ClearClipSegs(void)
     newend = solidsegs + 2;
 }
 
+// [AM] Interpolate the passed sector, if prudent.
+void R_CheckInterpolateSector(sector_t* sector)
+{
+    if (crispy->uncapped &&
+        // Only if we moved the sector last tic ...
+        sector->oldgametic == gametic - 1 &&
+        // ... and it has a thinker associated with it.
+        sector->specialdata)
+    {
+        // Interpolate between current and last floor/ceiling position.
+        if (sector->floorheight != sector->oldfloorheight)
+            sector->interpfloorheight =
+                LerpFixed(sector->oldfloorheight, sector->floorheight);
+        else
+            sector->interpfloorheight = sector->floorheight;
+        if (sector->ceilingheight != sector->oldceilingheight)
+            sector->interpceilingheight =
+                LerpFixed(sector->oldceilingheight, sector->ceilingheight);
+        else
+            sector->interpceilingheight = sector->ceilingheight;
+    }
+    else
+    {
+        sector->interpfloorheight = sector->floorheight;
+        sector->interpceilingheight = sector->ceilingheight;
+    }
+}
 
 //=============================================================================
 
@@ -222,8 +251,9 @@ void R_AddLine(seg_t * line)
 
 // OPTIMIZE: quickly reject orthogonal back sides
 
-    angle1 = R_PointToAngle(line->v1->x, line->v1->y);
-    angle2 = R_PointToAngle(line->v2->x, line->v2->y);
+    // [crispy] remove slime trails
+    angle1 = R_PointToAngleCrispy(line->v1->r_x, line->v1->r_y);
+    angle2 = R_PointToAngleCrispy(line->v2->r_x, line->v2->r_y);
 
 //
 // clip to view edges
@@ -268,18 +298,24 @@ void R_AddLine(seg_t * line)
     if (!backsector)
         goto clipsolid;         // single sided line
 
-    if (backsector->ceilingheight <= frontsector->floorheight
-        || backsector->floorheight >= frontsector->ceilingheight)
+    // [AM] Interpolate sector movement before
+    //      running clipping tests.  Frontsector
+    //      should already be interpolated.
+    R_CheckInterpolateSector(backsector);
+
+    if (backsector->interpceilingheight <= frontsector->interpfloorheight
+        || backsector->interpfloorheight >= frontsector->interpceilingheight)
         goto clipsolid;         // closed door
 
-    if (backsector->ceilingheight != frontsector->ceilingheight
-        || backsector->floorheight != frontsector->floorheight)
+    if (backsector->interpceilingheight != frontsector->interpceilingheight
+        || backsector->interpfloorheight != frontsector->interpfloorheight)
         goto clippass;          // window
 
 // reject empty lines used for triggers and special events
     if (backsector->ceilingpic == frontsector->ceilingpic
         && backsector->floorpic == frontsector->floorpic
-        && backsector->lightlevel == frontsector->lightlevel
+        && backsector->rlightlevel == frontsector->rlightlevel
+        && backsector->special == frontsector->special // [crispy] check for special as well
         && curline->sidedef->midtexture == 0)
         return;
 
@@ -355,8 +391,8 @@ boolean R_CheckBBox(fixed_t * bspcoord)
 //
 // check clip list for an open space
 //      
-    angle1 = R_PointToAngle(x1, y1) - viewangle;
-    angle2 = R_PointToAngle(x2, y2) - viewangle;
+    angle1 = R_PointToAngleCrispy(x1, y1) - viewangle;
+    angle2 = R_PointToAngleCrispy(x2, y2) - viewangle;
 
     span = angle1 - angle2;
     if (span >= ANG180)
@@ -424,18 +460,29 @@ void R_Subsector(int num)
     count = sub->numlines;
     line = &segs[sub->firstline];
 
-    if (frontsector->floorheight < viewz)
-        floorplane = R_FindPlane(frontsector->floorheight,
+    // [AM] Interpolate sector movement.  Usually only needed
+    //      when you're standing inside the sector.
+    R_CheckInterpolateSector(frontsector);
+
+    if (frontsector->interpfloorheight < viewz)
+        floorplane = R_FindPlane(frontsector->interpfloorheight,
+                                 // [crispy] add support for MBF sky transfers
+                                 frontsector->floorpic == skyflatnum &&
+                                 frontsector->sky & PL_SKYFLAT ? frontsector->sky :
                                  frontsector->floorpic,
-                                 frontsector->lightlevel,
+                                 frontsector->rlightlevel, // [crispy] A11Y
                                  frontsector->special);
     else
         floorplane = NULL;
-    if (frontsector->ceilingheight > viewz
+    if (frontsector->interpceilingheight > viewz
         || frontsector->ceilingpic == skyflatnum)
-        ceilingplane = R_FindPlane(frontsector->ceilingheight,
+        ceilingplane = R_FindPlane(frontsector->interpceilingheight,
+                                   // [crispy] add support for MBF sky transfers
+                                   frontsector->ceilingpic == skyflatnum &&
+                                   frontsector->sky & PL_SKYFLAT ? frontsector->sky :
                                    frontsector->ceilingpic,
-                                   frontsector->lightlevel, 0);
+                                   frontsector->rlightlevel, // [crispy] A11Y
+                                   0);
     else
         ceilingplane = NULL;
 
@@ -443,12 +490,13 @@ void R_Subsector(int num)
 
     while (count--)
     {
-        R_AddLine(line);
+        if (line->linedef)
+            R_AddLine(line);
         line++;
     }
 
     // check for solidsegs overflow - extremely unsatisfactory!
-    if(newend > &solidsegs[32])
+    if(newend > &solidsegs[32] && false)
         I_Error("R_Subsector: solidsegs overflow (vanilla may crash here)\n");
 }
 

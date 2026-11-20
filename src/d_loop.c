@@ -38,6 +38,8 @@
 #include "net_sdl.h"
 #include "net_loop.h"
 
+#include "crispy.h"
+
 // The complete set of data for a particular tic.
 
 typedef struct
@@ -74,6 +76,7 @@ static int recvtic;
 // The number of tics that have been run (using RunTic) so far.
 
 int gametic;
+int oldleveltime; // [crispy] check if leveltime keeps tickin'
 
 // When set to true, a single tic is run each time TryRunTics() is called.
 // This is used for -timedemo mode.
@@ -669,6 +672,7 @@ static void SinglePlayerClear(ticcmd_set_t *set)
     }
 }
 
+
 //
 // TryRunTics
 //
@@ -682,6 +686,11 @@ void TryRunTics (void)
     int realtics;
     int	availabletics;
     int	counts;
+
+    // [AM] If we've uncapped the framerate and there are no tics
+    //      to run, return early instead of waiting around.
+    extern int leveltime;
+    #define return_early (crispy->uncapped && counts == 0 && leveltime > oldleveltime && screenvisible)
 
     // get real tics
     entertic = I_GetTime() / ticdup;
@@ -708,7 +717,25 @@ void TryRunTics (void)
 
     if (new_sync)
     {
+        if (crispy->uncapped)
+        {
+            // decide how many tics to run
+            if (realtics < availabletics-1)
+                counts = realtics+1;
+            else if (realtics < availabletics)
+                counts = realtics;
+            else
+                counts = availabletics;
+        }
+        else
+        {
 	counts = availabletics;
+        }
+
+        // [AM] If we've uncapped the framerate and there are no tics
+        //      to run, return early instead of waiting around.
+        if (return_early)
+            return;
     }
     else
     {
@@ -719,6 +746,11 @@ void TryRunTics (void)
             counts = realtics;
         else
             counts = availabletics;
+
+        // [AM] If we've uncapped the framerate and there are no tics
+        //      to run, return early instead of waiting around.
+        if (return_early)
+            return;
 
         if (counts < 1)
             counts = 1;

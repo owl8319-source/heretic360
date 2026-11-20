@@ -27,6 +27,8 @@
 // Needed because we are refering to patches.
 #include "v_patch.h"
 
+#include "w_wad.h" // [crispy] for lumpindex_t
+
 //
 // VIDEO
 //
@@ -37,6 +39,8 @@
 extern int dirtybox[4];
 
 extern byte *tinttable;
+extern byte *dp_translation;
+extern boolean dp_translucent;
 
 // haleyjd 08/28/10: implemented for Strife support
 // haleyjd 08/28/10: Patch clipping callback, implemented to support Choco
@@ -55,20 +59,18 @@ void V_CopyRect(int srcx, int srcy, pixel_t *source,
                 int destx, int desty);
 
 void V_DrawPatch(int x, int y, patch_t *patch);
-#ifdef HERETIC360
-// Heretic 360: names the menu text being drawn, for the log's note on a patch off the screen (v_video.c).
-void V_SetDrawText(const char *text);
-#endif
 void V_DrawPatchFlipped(int x, int y, patch_t *patch);
 void V_DrawTLPatch(int x, int y, patch_t *patch);
 void V_DrawAltTLPatch(int x, int y, patch_t * patch);
 void V_DrawShadowedPatch(int x, int y, patch_t *patch);
 void V_DrawXlaPatch(int x, int y, patch_t * patch);     // villsa [STRIFE]
 void V_DrawPatchDirect(int x, int y, patch_t *patch);
+void V_DrawPatchFullScreen(patch_t *patch, boolean flipped);
 
 // Draw a linear block of pixels into the view buffer.
 
 void V_DrawBlock(int x, int y, int width, int height, pixel_t *src);
+void V_DrawScaledBlock(int x, int y, int width, int height, byte *src);
 
 void V_MarkRect(int x, int y, int width, int height);
 
@@ -77,13 +79,12 @@ void V_DrawHorizLine(int x, int y, int w, int c);
 void V_DrawVertLine(int x, int y, int h, int c);
 void V_DrawBox(int x, int y, int w, int h, int c);
 
-// Draw a raw screen lump
-
-void V_DrawRawScreen(pixel_t *raw);
-
 // Temporarily switch to using a different buffer to draw graphics, etc.
 
+void V_DrawFullscreenRawOrPatch(lumpindex_t index); // [crispy]
 void V_UseBuffer(pixel_t *buffer);
+void V_FillFlat(int y_start, int y_stop, int x_start, int x_stop,
+                const byte *src, pixel_t *dest);    // [crispy]
 
 // Return to using the normal screen buffer to draw graphics.
 
@@ -107,6 +108,8 @@ void V_LoadTintTable(void);
 void V_LoadXlaTable(void);
 
 void V_DrawMouseSpeedBox(int speed);
+
+boolean V_IsPatchLump(const int lump);
 
 #endif
 

@@ -19,9 +19,11 @@
 #include <stdlib.h>
 
 #include "doomdef.h"
+#include "i_system.h" // [crispy] I_Realloc()
 #include "m_bbox.h"
 #include "m_misc.h"
 #include "p_local.h"
+#include "p_mapformat.h"
 
 
 /*
@@ -261,7 +263,7 @@ void P_LineOpening(line_t * linedef)
 {
     sector_t *front, *back;
 
-    if (linedef->sidenum[1] == -1)
+    if (linedef->sidenum[1] == NO_INDEX) // [crispy] extended nodes
     {                           // single sided line
         openrange = 0;
         return;
@@ -425,7 +427,7 @@ If the function returns false, exit with false without checking anything else.
 boolean P_BlockLinesIterator(int x, int y, boolean(*func) (line_t *))
 {
     int offset;
-    short *list;
+    int32_t *list; // [crispy] BLOCKMAP limit
     line_t *ld;
 
     if (x < 0 || y < 0 || x >= bmapwidth || y >= bmapheight)
@@ -481,7 +483,26 @@ boolean P_BlockThingsIterator(int x, int y, boolean(*func) (mobj_t *))
 ===============================================================================
 */
 
-intercept_t intercepts[MAXINTERCEPTS], *intercept_p;
+intercept_t *intercepts, *intercept_p; // [crispy] remove INTERCEPTS limit
+
+// [crispy] remove INTERCEPTS limit
+void check_intercept(void)
+{
+	static size_t num_intercepts;
+	const size_t offset = intercept_p - intercepts;
+
+	if (offset >= num_intercepts)
+	{
+		num_intercepts = num_intercepts ? num_intercepts * 2 : MAXINTERCEPTS;
+		intercepts = I_Realloc(intercepts, sizeof(*intercepts) * num_intercepts);
+		intercept_p = intercepts + offset;
+
+		if (num_intercepts == 2 * MAXINTERCEPTS)
+		{
+			fprintf(stderr, "PIT_Add{Line,Thing}Intercepts: Hit INTERCEPTS limit!\n");
+		}
+	}
+}
 
 divline_t trace;
 boolean earlyout;
@@ -532,6 +553,7 @@ boolean PIT_AddLineIntercepts(line_t * ld)
     if (earlyout && frac < FRACUNIT && !ld->backsector)
         return false;           // stop checking
 
+    check_intercept(); // [crispy] remove INTERCEPTS limit
     intercept_p->frac = frac;
     intercept_p->isaline = true;
     intercept_p->d.line = ld;
@@ -590,6 +612,7 @@ boolean PIT_AddThingIntercepts(mobj_t * thing)
     frac = P_InterceptVector(&trace, &dl);
     if (frac < 0)
         return true;            // behind source
+    check_intercept(); // [crispy] remove INTERCEPTS limit
     intercept_p->frac = frac;
     intercept_p->isaline = false;
     intercept_p->d.thing = thing;

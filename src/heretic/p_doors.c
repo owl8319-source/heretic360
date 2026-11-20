@@ -19,6 +19,7 @@
 #include "doomdef.h"
 #include "deh_str.h"
 #include "p_local.h"
+#include "p_mapformat.h"
 #include "s_sound.h"
 #include "v_video.h"
 
@@ -259,6 +260,13 @@ void EV_VerticalDoor(line_t * line, mobj_t * thing)
     }
 
     // if the sector has an active thinker, use it
+    if (line->sidenum[side^1] == NO_INDEX)
+    {
+        // [crispy] do not crash if the wrong side of the door is pushed
+        fprintf(stderr, "EV_VerticalDoor: DR special type on 1-sided linedef\n");
+        return;
+    }
+
     sec = sides[line->sidenum[side ^ 1]].sector;
     if (sec->specialdata)
     {

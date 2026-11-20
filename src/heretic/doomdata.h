@@ -63,10 +63,11 @@ typedef PACKED_STRUCT (
 
 typedef PACKED_STRUCT (
 {
-    short v1, v2;
-    short flags;
+    unsigned short v1, v2; // [crispy] extended nodes
+    unsigned short flags; // [crispy] extended nodes
     short special, tag;
-    short sidenum[2];           // sidenum[1] will be -1 if one sided
+    // sidenum[1] will be NO_INDEX if one sided
+    unsigned short sidenum[2]; // [crispy] extended nodes
 }) maplinedef_t;
 
 #define	ML_BLOCKING			1
@@ -95,28 +96,6 @@ typedef PACKED_STRUCT (
     short lightlevel;
     short special, tag;
 }) mapsector_t;
-
-typedef PACKED_STRUCT (
-{
-    short numsegs;
-    short firstseg;             // segs are stored sequentially
-}) mapsubsector_t;
-
-typedef PACKED_STRUCT (
-{
-    short v1, v2;
-    short angle;
-    short linedef, side;
-    short offset;
-}) mapseg_t;
-
-#define	NF_SUBSECTOR	0x8000
-typedef PACKED_STRUCT (
-{
-    short x, y, dx, dy;         // partition line
-    short bbox[2][4];           // bounding box for each child
-    unsigned short children[2]; // if NF_SUBSECTOR its a subsector
-}) mapnode_t;
 
 typedef PACKED_STRUCT (
 {

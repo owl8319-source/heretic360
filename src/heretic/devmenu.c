@@ -16,6 +16,7 @@
 // would open that straight after.)
 
 #include "doomdef.h"
+#include "crispy.h"
 #include "deh_str.h"
 #include "i_joystick.h"
 #include "i_timer.h"
@@ -193,16 +194,19 @@ boolean DM_Responder(event_t *event)
     return taken;
 }
 
-// Darkens the box behind the menu through COLORMAP, as Heretic darkens a dim room.
+// Darkens the box behind the menu through COLORMAP, as Heretic darkens a dim room. The box is on Heretic's 320x200
+// screen: [crispy] twice the size with the high resolution, and moved right by WIDESCREENDELTA in widescreen.
 static void DarkenBox(void)
 {
     const byte *colormap = (const byte *) W_CacheLumpName(DEH_String("COLORMAP"), PU_CACHE) + 256 * BOX_DARKNESS;
+    const int left = (BOX_LEFT + WIDESCREENDELTA) << crispy->hires;
+    const int right = (BOX_RIGHT + WIDESCREENDELTA) << crispy->hires;
 
-    for (int y = BOX_TOP; y < BOX_BOTTOM; y++)
+    for (int y = BOX_TOP << crispy->hires; y < BOX_BOTTOM << crispy->hires; y++)
     {
         pixel_t *row = I_VideoBuffer + y * SCREENWIDTH;
 
-        for (int x = BOX_LEFT; x < BOX_RIGHT; x++)
+        for (int x = left; x < right; x++)
         {
             row[x] = colormap[row[x]];
         }

@@ -22,7 +22,7 @@
 #include "i_sound.h"
 
 #define MAX_SND_DIST 	1600
-#define MAX_CHANNELS	16
+#define MAX_CHANNELS	32
 
 // Music identifiers
 
@@ -286,6 +286,6 @@ typedef enum
 } sfxenum_t;
 
 extern sfxinfo_t S_sfx[];
-extern musicinfo_t S_music[];
+extern musicinfo_t S_music[][2];
 
 #endif

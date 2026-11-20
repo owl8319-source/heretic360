@@ -1,4 +1,4 @@
-// Heretic 360: Chocolate Doom's i_timer.c on SDL3's timer, which SDL-xenon takes from xsdk's POSIX clocks.
+// Heretic 360: Crispy Doom's i_timer.c on SDL3's timer, which SDL-xenon takes from xsdk's POSIX clocks.
 
 #include <SDL3/SDL.h>
 
@@ -31,6 +31,28 @@ int I_GetTime(void)
 int I_GetTimeMS(void)
 {
     return (int) TicksSinceStart();
+}
+
+// [crispy] The same in microseconds, for the frame-rate limiter.
+
+uint64_t I_GetTimeUS(void)
+{
+    static Uint64 basens = 0;
+    Uint64 ns = SDL_GetTicksNS();
+
+    if (basens == 0)
+    {
+        basens = ns;
+    }
+
+    return (uint64_t) ((ns - basens) / 1000);
+}
+
+// [crispy] How far into the current tic we are, for drawing between tics.
+
+fixed_t I_GetFracRealTime(void)
+{
+    return (int64_t) I_GetTimeMS() * TICRATE % 1000 * FRACUNIT / 1000;
 }
 
 // Sleeps for about ms milliseconds; on the console a sleep can run up to a millisecond long.

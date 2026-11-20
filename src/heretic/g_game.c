@@ -17,6 +17,9 @@
 // G_game.c
 
 #include <stdio.h>
+#ifdef HERETIC360
+#include <math.h> // Heretic 360: lround, which a PC build gets through SDL's headers
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include "doomdef.h"
@@ -26,6 +29,7 @@
 #include "i_joystick.h"
 #include "i_timer.h"
 #include "i_system.h"
+#include "i_swap.h"
 #include "m_argv.h"
 #include "m_controls.h"
 #include "m_misc.h"
@@ -34,9 +38,16 @@
 #include "s_sound.h"
 #include "v_video.h"
 
+#include "deh_main.h" // [crispy] for demo footer
+#include "memio.h"
+#include "p_extsaveg.h" // [crispy] for extended savegame information
+
 // Macros
 
 #define AM_STARTKEY     9
+
+#define MLOOKUNIT 8 // [crispy] for mouselook
+#define MLOOKUNITLOWRES 16 // [crispy] for mouselook when recording
 
 // Functions
 
@@ -96,6 +107,7 @@ boolean sendsave;               // send a save event next tic
 boolean usergame;               // ok to save / end game
 
 boolean timingdemo;             // if true, exit with report on completion
+boolean nodrawers = false; // [crispy] for the demowarp feature
 int starttime;                  // for comparative timing purposes
 
 boolean viewactive;
@@ -109,10 +121,16 @@ int consoleplayer;              // player taking events and displaying
 int displayplayer;              // view being displayed
 int levelstarttic;              // gametic at level start
 int totalkills, totalitems, totalsecret;        // for intermission
+int totalleveltimes; // [crispy] total time for all completed levels
 
-int mouseSensitivity;
+boolean finalintermission; // [crispy] track intermission at end of episode
+
+int mouseSensitivity = 5;
+int mouseSensitivity_x2 = 5;
+int mouseSensitivity_y = 5;
 
 char *demoname;
+static const char *orig_demoname = NULL; // [crispy] the name originally chosen for the demo, i.e. without "-00000"
 boolean demorecording;
 boolean longtics;               // specify high resolution turning in demos
 boolean lowres_turn;
@@ -193,6 +211,18 @@ int mousex, mousey;             // mouse values are used once
 int dclicktime, dclickstate, dclicks;
 int dclicktime2, dclickstate2, dclicks2;
 
+// [crispy] for rounding error
+typedef struct carry_s
+{
+    double angle;
+    double pitch;
+    double side;
+    double vert;
+} carry_t;
+
+static carry_t prevcarry;
+static carry_t carry;
+
 #define MAX_JOY_BUTTONS 20
 
 int joyxmove, joyymove;         // joystick values are repeated
@@ -203,6 +233,8 @@ boolean *joybuttons = &joyarray[1];     // allow [-1]
 
 int savegameslot;
 char savedescription[32];
+
+static ticcmd_t basecmd; // [crispy]
 
 int vanilla_demo_limit = 1;
 
@@ -278,6 +310,80 @@ static int G_NextWeapon(int direction)
     return weapon_order_table[i].weapon_num;
 }
 
+boolean usearti = true;
+
+boolean speedkeydown (void)
+{
+    return (key_speed < NUMKEYS && gamekeydown[key_speed]) ||
+           (joybspeed < MAX_JOY_BUTTONS && joybuttons[joybspeed]) ||
+           (mousebspeed < MAX_MOUSE_BUTTONS && mousebuttons[mousebspeed]);
+}
+
+// [crispy] for carrying rounding error
+static int CarryError(double value, const double *prevcarry, double *carry)
+{
+    const double desired = value + *prevcarry;
+    const int actual = lround(desired);
+    *carry = desired - actual;
+
+    return actual;
+}
+
+static short CarryAngle(double angle)
+{
+    if (lowres_turn && abs(angle + prevcarry.angle) < 128)
+    {
+        carry.angle = angle + prevcarry.angle;
+        return 0;
+    }
+    else
+    {
+        return CarryError(angle, &prevcarry.angle, &carry.angle);
+    }
+}
+
+static short CarryPitch(double pitch)
+{
+    return CarryError(pitch, &prevcarry.pitch, &carry.pitch);
+}
+
+static int CarryMouseVert(double vert)
+{
+    return CarryError(vert, &prevcarry.vert, &carry.vert);
+}
+
+static int CarryMouseSide(double side)
+{
+    const double desired = side + prevcarry.side;
+    const int actual = lround(side * 0.5) * 2; // Even values only.
+    carry.side = desired - actual;
+    return actual;
+}
+
+static double CalcMouseAngle(int mousex)
+{
+    if (!mouseSensitivity)
+        return 0.0;
+
+    return (I_AccelerateMouse(mousex) * (mouseSensitivity + 5) * 8 / 10);
+}
+
+static double CalcMouseSide(int mousex)
+{
+    if (!mouseSensitivity_x2)
+        return 0.0;
+
+    return (I_AccelerateMouse(mousex) * (mouseSensitivity_x2 + 5) * 2 / 10);
+}
+
+static double CalcMouseVert(int mousey)
+{
+    if (!mouseSensitivity_y)
+        return 0.0;
+
+    return (I_AccelerateMouseY(mousey) * (mouseSensitivity_y + 5) / 10);
+}
+
 /*
 ====================
 =
@@ -290,20 +396,27 @@ static int G_NextWeapon(int direction)
 */
 
 
-boolean usearti = true;
-
 void G_BuildTiccmd(ticcmd_t *cmd, int maketic)
 {
     int i;
     boolean strafe, bstrafe;
     int speed, tspeed, lspeed;
+    int angle = 0; // [crispy]
+    short mousex_angleturn; // [crispy]
     int forward, side;
     int look, arti;
     int flyheight;
 
+    static unsigned int mbmlookctrl = 0; // [crispy]
+    static unsigned int kbdlookctrl = 0; // [crispy]
+
     // haleyjd: removed externdriver crap
 
-    memset(cmd, 0, sizeof(*cmd));
+    // [crispy] For fast polling.
+    G_PrepTiccmd();
+    memcpy(cmd, &basecmd, sizeof(*cmd));
+    memset(&basecmd, 0, sizeof(ticcmd_t));
+
     //cmd->consistancy =
     //      consistancy[consoleplayer][(maketic*ticdup)%BACKUPTICS];
     cmd->consistancy = consistancy[consoleplayer][maketic % BACKUPTICS];
@@ -312,10 +425,12 @@ void G_BuildTiccmd(ticcmd_t *cmd, int maketic)
 
     strafe = gamekeydown[key_strafe] || mousebuttons[mousebstrafe]
         || joybuttons[joybstrafe];
-    speed = joybspeed >= MAX_JOY_BUTTONS
-         || gamekeydown[key_speed]
-         || joybuttons[joybspeed]
-         || mousebuttons[mousebspeed];
+
+    // [crispy] when "always run" is active,
+    // pressing the "run" key will result in walking
+    speed = (key_speed >= NUMKEYS
+         || joybspeed >= MAX_JOY_BUTTONS);
+    speed ^= speedkeydown();
 
     // haleyjd: removed externdriver crap
     
@@ -352,62 +467,109 @@ void G_BuildTiccmd(ticcmd_t *cmd, int maketic)
         lspeed = 2;
     }
 
+    // [crispy] add quick 180° reverse
+    if (gamekeydown[key_reverse] || mousebuttons[mousebreverse])
+    {
+        angle += ANG180 >> FRACBITS;
+        gamekeydown[key_reverse] = false;
+        mousebuttons[mousebreverse] = false;
+    }
+
+    // [crispy] toggle "always run"
+    if (gamekeydown[key_toggleautorun])
+    {
+        static int joybspeed_old = 2;
+
+        if (joybspeed >= MAX_JOY_BUTTONS)
+        {
+            joybspeed = joybspeed_old;
+        }
+        else
+        {
+            joybspeed_old = joybspeed;
+            joybspeed = MAX_JOY_BUTTONS;
+        }
+
+        P_SetMessage(&players[consoleplayer], (joybspeed >= MAX_JOY_BUTTONS) ?
+                     "ALWAYS RUN ON" :
+                     "ALWAYS RUN OFF", false);
+
+        S_StartSound(NULL, sfx_switch);
+
+        gamekeydown[key_toggleautorun] = false;
+    }
+
+    // [crispy] Toggle vertical mouse movement
+    if (gamekeydown[key_togglenovert])
+    {
+        novert = !novert;
+
+        P_SetMessage(&players[consoleplayer], novert ?
+                     "VERTICAL MOUSE MOVEMENT OFF" :
+                     "VERTICAL MOUSE MOVEMENT ON", false);
+
+        S_StartSound(NULL, sfx_switch);
+
+        gamekeydown[key_togglenovert] = false;
+    }
+
 //
 // let movement keys cancel each other out
 //
     if (strafe)
     {
-        if (gamekeydown[key_right] || mousebuttons[mousebturnright])
-            side += sidemove[speed];
-        if (gamekeydown[key_left] || mousebuttons[mousebturnleft])
-            side -= sidemove[speed];
-        if (use_analog && joyxmove)
+        if (!cmd->angleturn)
         {
-            joyxmove = joyxmove * joystick_move_sensitivity / 10;
-            joyxmove = (joyxmove > FRACUNIT) ? FRACUNIT : joyxmove;
-            joyxmove = (joyxmove < -FRACUNIT) ? -FRACUNIT : joyxmove;
-            side += FixedMul(sidemove[speed], joyxmove);
-        }
-        else if (joystick_move_sensitivity)
-        {
-            if (joyxmove > 0)
+            if (gamekeydown[key_right] || mousebuttons[mousebturnright])
                 side += sidemove[speed];
-            if (joyxmove < 0)
+            if (gamekeydown[key_left] || mousebuttons[mousebturnleft])
                 side -= sidemove[speed];
+            if (use_analog && joyxmove)
+            {
+                joyxmove = joyxmove * joystick_move_sensitivity / 10;
+                joyxmove = BETWEEN(-FRACUNIT, FRACUNIT, joyxmove);
+                side += FixedMul(sidemove[speed], joyxmove);
+            }
+            else if (joystick_move_sensitivity)
+            {
+                if (joyxmove > 0)
+                    side += sidemove[speed];
+                if (joyxmove < 0)
+                    side -= sidemove[speed];
+            }
         }
     }
     else
     {
         if (gamekeydown[key_right] || mousebuttons[mousebturnright])
-            cmd->angleturn -= angleturn[tspeed];
+            angle -= angleturn[tspeed];
         if (gamekeydown[key_left] || mousebuttons[mousebturnleft])
-            cmd->angleturn += angleturn[tspeed];
+            angle += angleturn[tspeed];
         if (use_analog && joyxmove)
         {
             // Cubic response curve allows for finer control when stick
             // deflection is small.
             joyxmove = FixedMul(FixedMul(joyxmove, joyxmove), joyxmove);
             joyxmove = joyxmove * joystick_turn_sensitivity / 10;
-            cmd->angleturn -= FixedMul(angleturn[1], joyxmove);
+            angle -= FixedMul(angleturn[1], joyxmove);
         }
         else if (joystick_turn_sensitivity)
         {
             if (joyxmove > 0)
-                cmd->angleturn -= angleturn[tspeed];
+                angle -= angleturn[tspeed];
             if (joyxmove < 0)
-                cmd->angleturn += angleturn[tspeed];
+                angle += angleturn[tspeed];
         }
     }
 
-    if (gamekeydown[key_up])
+    if (gamekeydown[key_up] || gamekeydown[key_alt_up]) // [crispy] add key_alt_*
         forward += forwardmove[speed];
-    if (gamekeydown[key_down])
+    if (gamekeydown[key_down] || gamekeydown[key_alt_down]) // [crispy] add key_alt_*
         forward -= forwardmove[speed];
     if (use_analog && joyymove)
     {
         joyymove = joyymove * joystick_move_sensitivity / 10;
-        joyymove = (joyymove > FRACUNIT) ? FRACUNIT : joyymove;
-        joyymove = (joyymove < -FRACUNIT) ? FRACUNIT : joyymove;
+        joyymove = BETWEEN(-FRACUNIT, FRACUNIT, joyymove);
         forward -= FixedMul(forwardmove[speed], joyymove);
     }
     else if (joystick_move_sensitivity)
@@ -417,18 +579,17 @@ void G_BuildTiccmd(ticcmd_t *cmd, int maketic)
         if (joyymove > 0)
             forward -= forwardmove[speed];
     }
-    if (gamekeydown[key_straferight] || mousebuttons[mousebstraferight]
+    if (gamekeydown[key_straferight] || gamekeydown[key_alt_straferight] || mousebuttons[mousebstraferight] // [crispy] add key_alt_*
      || joybuttons[joybstraferight])
         side += sidemove[speed];
-    if (gamekeydown[key_strafeleft] || mousebuttons[mousebstrafeleft]
+    if (gamekeydown[key_strafeleft] || gamekeydown[key_alt_strafeleft] || mousebuttons[mousebstrafeleft] // [crispy] add key_alt_*
      || joybuttons[joybstrafeleft])
         side -= sidemove[speed];
 
     if (use_analog && joystrafemove)
     {
         joystrafemove = joystrafemove * joystick_move_sensitivity / 10;
-        joystrafemove = (joystrafemove > FRACUNIT) ? FRACUNIT : joystrafemove;
-        joystrafemove = (joystrafemove < -FRACUNIT) ? -FRACUNIT : joystrafemove;
+        joystrafemove = BETWEEN(-FRACUNIT, FRACUNIT, joystrafemove);
         side += FixedMul(sidemove[speed], joystrafemove);
     }
     else if (joystick_move_sensitivity)
@@ -439,37 +600,79 @@ void G_BuildTiccmd(ticcmd_t *cmd, int maketic)
             side += sidemove[speed];
     }
     // Look up/down/center keys
-    if (gamekeydown[key_lookup])
+    // [crispy] Keyboard lookspring
+    if (crispy->freelook_hh == FREELOOK_HH_SPRING)
     {
-        look = lspeed;
+        if (gamekeydown[key_lookup])
+        {
+            look = lspeed;
+            kbdlookctrl += ticdup;
+        }
+        else if (gamekeydown[key_lookdown])
+        {
+            look = -lspeed;
+            kbdlookctrl += ticdup;
+        }
+        else if (use_analog && joylook)
+        {
+            joylook = joylook * joystick_look_sensitivity / 10;
+            joylook = BETWEEN(-FRACUNIT, FRACUNIT, joylook);
+            look = -FixedMul(2, joylook);
+            kbdlookctrl += ticdup;
+        }
+        else if (joystick_look_sensitivity && joylook)
+        {
+            if (joylook < 0)
+            {
+                look = lspeed;
+                kbdlookctrl += ticdup;
+            }
+
+            if (joylook > 0)
+            {
+                look = -lspeed;
+                kbdlookctrl += ticdup;
+            }
+        }
+        else if (gamekeydown[key_lookcenter] || kbdlookctrl)
+        {
+            look = TOCENTER;
+            kbdlookctrl = 0;
+        }
     }
-    if (gamekeydown[key_lookdown])
+    else
     {
-        look = -lspeed;
-    }
-    if (use_analog && joylook)
-    {
-        joylook = joylook * joystick_look_sensitivity / 10;
-        joylook = (joylook > FRACUNIT) ? FRACUNIT : joylook;
-        joylook = (joylook < -FRACUNIT) ? -FRACUNIT : joylook;
-        look = -FixedMul(2, joylook);
-    }
-    else if (joystick_look_sensitivity)
-    {
-        if (joylook < 0)
+        if (gamekeydown[key_lookup])
         {
             look = lspeed;
         }
-
-        if (joylook > 0)
+        if (gamekeydown[key_lookdown])
         {
             look = -lspeed;
         }
-    }
-    // haleyjd: removed externdriver crap
-    if (gamekeydown[key_lookcenter])
-    {
-        look = TOCENTER;
+        if (use_analog && joylook)
+        {
+            joylook = joylook * joystick_look_sensitivity / 10;
+            joylook = BETWEEN(-FRACUNIT, FRACUNIT, joylook);
+            look = -FixedMul(2, joylook);
+        }
+        else if (joystick_look_sensitivity)
+        {
+            if (joylook < 0)
+            {
+                look = lspeed;
+            }
+
+            if (joylook > 0)
+            {
+                look = -lspeed;
+            }
+        }
+        // haleyjd: removed externdriver crap
+        if (gamekeydown[key_lookcenter])
+        {
+            look = TOCENTER;
+        }
     }
 
     // haleyjd: removed externdriver crap
@@ -689,23 +892,73 @@ void G_BuildTiccmd(ticcmd_t *cmd, int maketic)
 	}
     }
 
-    if (strafe)
+    if (strafe && !cmd->angleturn)
     {
-        side += mousex * 2;
-    }
-    else
-    {
-        cmd->angleturn -= mousex * 0x8;
+        side += CarryMouseSide(CalcMouseSide(mousex));
     }
 
     // No mouse movement in previous frame?
 
-    if (mousex == 0)
+    mousex_angleturn = cmd->angleturn;
+
+    if (mousex_angleturn == 0)
     {
         testcontrols_mousespeed = 0;
     }
 
-    forward += mousey;
+    if (angle)
+    {
+        cmd->angleturn = CarryAngle(cmd->angleturn + angle);
+        localview.ticangleturn = cmd->angleturn - mousex_angleturn;
+    }
+
+    if (cmd->lookdir)
+    {
+        if (demorecording || lowres_turn)
+        {
+            // [Dasperal] Skip mouse look if it is TOCENTER cmd
+            if (look != TOCENTER)
+            {
+                // [crispy] Map mouse movement to look variable when recording
+                look += cmd->lookdir / MLOOKUNITLOWRES;
+
+                // [crispy] Limit to max speed of keyboard look up/down
+                if (look > 2)
+                    look = 2;
+                else if (look < -2)
+                    look = -2;
+            }
+            cmd->lookdir = 0;
+        }
+        else
+        {
+            // [Dasperal] Allow precise vertical look with near 0 mouse movement
+            if (cmd->lookdir > 0)
+                cmd->lookdir = (cmd->lookdir + MLOOKUNIT - 1) / MLOOKUNIT;
+            else
+                cmd->lookdir = (cmd->lookdir - MLOOKUNIT + 1) / MLOOKUNIT;
+        }
+    }
+    else if (!novert)
+    {
+        forward += CarryMouseVert(CalcMouseVert(mousey));
+    }
+
+    // [crispy] single click on mouse look button centers view
+    if (mousebuttons[mousebmouselook]) // [crispy] clicked
+    {
+        mbmlookctrl += ticdup;
+    }
+    else if (mbmlookctrl) // [crispy] released
+    {
+        if (crispy->freelook_hh == FREELOOK_HH_SPRING ||
+                mbmlookctrl < SLOWTURNTICS) // [crispy] short click
+        {
+            look = TOCENTER;
+        }
+        mbmlookctrl = 0;
+    }
+
     mousex = mousey = 0;
 
     if (forward > MAXPLMOVE)
@@ -719,6 +972,12 @@ void G_BuildTiccmd(ticcmd_t *cmd, int maketic)
 
     cmd->forwardmove += forward;
     cmd->sidemove += side;
+
+    // [crispy]
+    localview.angle = 0;
+    localview.rawangle = 0.0;
+    prevcarry = carry;
+
     if (players[consoleplayer].playerstate == PST_LIVE)
     {
         if (look < 0)
@@ -736,7 +995,8 @@ void G_BuildTiccmd(ticcmd_t *cmd, int maketic)
 //
 // special buttons
 //
-    if (sendpause)
+    // [crispy] suppress pause when a new game is started
+    if (sendpause && gameaction != ga_newgame)
     {
         sendpause = false;
         cmd->buttons = BT_SPECIAL | BTS_PAUSE;
@@ -753,20 +1013,23 @@ void G_BuildTiccmd(ticcmd_t *cmd, int maketic)
     {
         if (shortticfix)
         {
-            static signed short carry = 0;
             signed short desired_angleturn;
 
-            desired_angleturn = cmd->angleturn + carry;
+            desired_angleturn = cmd->angleturn;
 
             // round angleturn to the nearest 256 unit boundary
             // for recording demos with single byte values for turn
 
             cmd->angleturn = (desired_angleturn + 128) & 0xff00;
+            if (angle)
+            {
+                localview.ticangleturn = cmd->angleturn - mousex_angleturn;
+            }
 
             // Carry forward the error from the reduced resolution to the
             // next tic, so that successive small movements can accumulate.
 
-            carry = desired_angleturn - cmd->angleturn;
+            prevcarry.angle += desired_angleturn - cmd->angleturn;
         }
         else
         {
@@ -799,6 +1062,27 @@ void G_DoLoadLevel(void)
         memset(players[i].frags, 0, sizeof(players[i].frags));
     }
 
+    // [crispy] wand start
+    if (crispy->pistolstart)
+    {
+        if (crispy->singleplayer)
+        {
+            G_PlayerReborn(0);
+        }
+        else if (demoplayback && !singledemo)
+        {
+            // no-op - silently ignore pistolstart when playing demo from
+            // the demo reel
+        }
+        else
+        {
+            const char message[] = "The -wandstart option is not supported"
+                                   " for demos and\n"
+                                   " network play.";
+            I_Error(message);
+        }
+    }
+
 #ifdef HERETIC360
     {
         // Heretic 360: how long the level took to load, for the log.
@@ -820,6 +1104,10 @@ void G_DoLoadLevel(void)
     memset(gamekeydown, 0, sizeof(gamekeydown));
     joyxmove = joyymove = joystrafemove = joylook = 0;
     mousex = mousey = 0;
+    memset(&localview, 0, sizeof(localview)); // [crispy]
+    memset(&carry, 0, sizeof(carry)); // [crispy]
+    memset(&prevcarry, 0, sizeof(prevcarry)); // [crispy]
+    memset(&basecmd, 0, sizeof(basecmd)); // [crispy]
     sendpause = sendsave = paused = false;
     memset(mousearray, 0, sizeof(mousearray));
     memset(joyarray, 0, sizeof(joyarray));
@@ -885,6 +1173,11 @@ static void SetJoyButtons(unsigned int buttons_mask)
 static boolean InventoryMoveLeft()
 {
     inventoryTics = 5 * 35;
+
+    if (MenuActive)
+    {
+        return false;
+    }
     if (!inventory)
     {
         inventory = true;
@@ -912,6 +1205,11 @@ static boolean InventoryMoveRight()
 
     plr = &players[consoleplayer];
     inventoryTics = 5 * 35;
+
+    if (MenuActive)
+    {
+        return false;
+    }
     if (!inventory)
     {
         inventory = true;
@@ -927,9 +1225,9 @@ static boolean InventoryMoveRight()
     else
     {
         curpos++;
-        if (curpos > 6)
+        if (curpos > CURPOS_MAX)
         {
-            curpos = 6;
+            curpos = CURPOS_MAX;
         }
     }
     return true;
@@ -1002,6 +1300,14 @@ boolean G_Responder(event_t * ev)
             plr->readyArtifact = plr->inventory[inv_ptr].type;
         }
         usearti = true;
+    }
+
+    // [crispy] demo fast-forward
+    if (ev->type == ev_keydown && ev->data1 == key_demospeed && 
+        (demoplayback || gamestate == GS_DEMOSCREEN))
+    {
+        singletics = !singletics;
+        return true;
     }
 
     // Check for spy mode player cycle
@@ -1090,8 +1396,8 @@ boolean G_Responder(event_t * ev)
 
         case ev_mouse:
             SetMouseButtons(ev->data1);
-            mousex = ev->data2 * (mouseSensitivity + 5) / 10;
-            mousey = ev->data3 * (mouseSensitivity + 5) / 10;
+            mousex += ev->data2;
+            mousey += ev->data3;
             return (true);      // eat events
 
         case ev_joystick:
@@ -1108,6 +1414,56 @@ boolean G_Responder(event_t * ev)
     return (false);
 }
 
+// [crispy] For fast polling.
+void G_FastResponder (void)
+{
+    if (newfastmouse)
+    {
+        mousex += fastmouse.data2;
+        mousey += fastmouse.data3;
+
+        newfastmouse = false;
+    }
+}
+
+// [crispy]
+void G_PrepTiccmd (void)
+{
+    const boolean strafe = gamekeydown[key_strafe] ||
+        mousebuttons[mousebstrafe] || joybuttons[joybstrafe];
+
+    if (mousex && !strafe)
+    {
+        localview.rawangle -= CalcMouseAngle(mousex);
+        basecmd.angleturn = CarryAngle(localview.rawangle);
+        localview.angle = basecmd.angleturn << 16;
+        mousex = 0;
+    }
+
+    if (mousey && (crispy->mouselook || mousebuttons[mousebmouselook]))
+    {
+        const double vert = CalcMouseVert(mousey);
+        basecmd.lookdir += mouse_y_invert ?
+                            CarryPitch(-vert): CarryPitch(vert);
+        mousey = 0;
+    }
+}
+
+// [crispy] take a screenshot after rendering the next frame
+static void G_CrispyScreenShot()
+{
+    // [crispy] increase screenshot filename limit
+    V_ScreenShot("HTIC%04i.%s");
+    if (gamestate == GS_LEVEL)
+        P_SetMessage(&players[consoleplayer], DEH_String("SCREEN SHOT"), false);
+    if (crispy->screenshot == 2)
+    {
+        R_SetViewSize(BETWEEN(3, 11, screenblocks), detailLevel);
+    }
+    crispy->screenshot = 0;
+}
+
+
 /*
 ===============================================================================
 =
@@ -1120,6 +1476,7 @@ void G_Ticker(void)
 {
     int i, buf;
     ticcmd_t *cmd = NULL;
+    extern boolean automapactive;
 
 //
 // do player reborns if needed
@@ -1133,6 +1490,8 @@ void G_Ticker(void)
 //
     while (gameaction != ga_nothing)
     {
+        // [crispy] check if we are in the demo reel
+        CheckCrispySingleplayer(!demorecording && gameaction != ga_playdemo && !netgame);
         switch (gameaction)
         {
             case ga_loadlevel:
@@ -1151,7 +1510,17 @@ void G_Ticker(void)
                 G_DoPlayDemo();
                 break;
             case ga_screenshot:
-                V_ScreenShot("HTIC%02i.%s");
+                if (gamestate == GS_LEVEL)
+                {
+                    if (crispy->screenshot == 2 && (!automapactive || crispy->automapoverlay))
+                    {
+                        R_SetViewSize(11, detailLevel);
+                        R_ExecuteSetViewSize();
+                    }
+                }
+                // [crispy] screenshot always after drawing is done
+                crispy->post_rendering_hook = G_CrispyScreenShot;
+                BorderNeedRefresh = true;
                 gameaction = ga_nothing;
                 break;
             case ga_completed:
@@ -1256,6 +1625,9 @@ void G_Ticker(void)
         inventory = false;
         cmd->arti = 0;
     }
+
+    oldleveltime = leveltime; // [crispy] Track if game is running
+
 //
 // do main actions
 //
@@ -1352,7 +1724,8 @@ void G_PlayerFinishLevel(int player)
         p->chickenTics = 0;
     }
     p->messageTics = 0;
-    p->lookdir = 0;
+    p->centerMessageTics = 0;
+    p->lookdir = p->oldlookdir = 0;
     p->mo->flags &= ~MF_SHADOW; // Remove invisibility
     p->extralight = 0;          // Remove weapon flashes
     p->fixedcolormap = 0;       // Remove torch
@@ -1580,10 +1953,89 @@ void G_SecretExitLevel(void)
     gameaction = ga_completed;
 }
 
+// [crispy] format time for level statistics
+#define TIMESTRSIZE 16
+static void G_FormatLevelStatTime(char *str, int tics)
+{
+    int exitHours, exitMinutes;
+    float exitTime, exitSeconds;
+
+    exitTime = (float) tics / 35;
+    exitHours = exitTime / 3600;
+    exitTime -= exitHours * 3600;
+    exitMinutes = exitTime / 60;
+    exitTime -= exitMinutes * 60;
+    exitSeconds = exitTime;
+
+    if (exitHours)
+    {
+        M_snprintf(str, TIMESTRSIZE, "%d:%02d:%05.2f",
+                    exitHours, exitMinutes, exitSeconds);
+    }
+    else
+    {
+        M_snprintf(str, TIMESTRSIZE, "%01d:%05.2f", exitMinutes, exitSeconds);
+    }
+}
+
+// [crispy] Write level statistics upon exit
+static void G_WriteLevelStat(void)
+{
+    static FILE *fstream = NULL;
+
+    int i, playerKills = 0, playerItems = 0, playerSecrets = 0;
+
+    char levelTimeString[TIMESTRSIZE];
+    char totalTimeString[TIMESTRSIZE];
+    char *decimal;
+
+    if (fstream == NULL)
+    {
+        fstream = fopen("levelstat.txt", "w");
+
+        if (fstream == NULL)
+        {
+            fprintf(stderr, "G_WriteLevelStat: Unable to open levelstat.txt for writing!\n");
+            return;
+        }
+    }
+
+    G_FormatLevelStatTime(levelTimeString, leveltime);
+    G_FormatLevelStatTime(totalTimeString, totalleveltimes + leveltime);
+
+    // Total time ignores centiseconds
+    decimal = strchr(totalTimeString, '.');
+    if (decimal != NULL)
+    {
+        *decimal = '\0';
+    }
+
+    for (i = 0; i < MAXPLAYERS; i++)
+    {
+        if (playeringame[i])
+        {
+            playerKills += players[i].killcount;
+            playerItems += players[i].itemcount;
+            playerSecrets += players[i].secretcount;
+        }
+    }
+
+    fprintf(fstream, "E%dM%d%s - %s (%s)  K: %d/%d  I: %d/%d  S: %d/%d\n",
+            gameepisode, gamemap, (secretexit ? "s" : ""),
+            levelTimeString, totalTimeString, playerKills, totalkills, 
+            playerItems, totalitems, playerSecrets, totalsecret);
+}
+
 void G_DoCompleted(void)
 {
     int i;
     static int afterSecret[5] = { 7, 5, 5, 5, 4 };
+
+    // [crispy] Write level statistics upon exit
+    if (M_ParmExists("-levelstat"))
+    {
+        G_WriteLevelStat();
+    }
 
     gameaction = ga_nothing;
 
@@ -1610,13 +2062,17 @@ void G_DoCompleted(void)
     }
     else if (gamemap == 8)
     {
-        gameaction = ga_victory;
-        return;
+        // [crispy] track intermission at end of episode
+        finalintermission = true;
     }
     else
     {
         gamemap++;
     }
+
+    // [crispy] total time for all completed levels (only count seconds)
+    totalleveltimes += (leveltime - leveltime % TICRATE);
+
     gamestate = GS_INTERMISSION;
     IN_Start();
 }
@@ -1630,6 +2086,12 @@ void G_DoCompleted(void)
 void G_WorldDone(void)
 {
     gameaction = ga_worlddone;
+
+    // [crispy] track intermission at end of episode
+    if (finalintermission)
+    {
+        gameaction = ga_victory;
+    }
 }
 
 //============================================================================
@@ -1678,6 +2140,9 @@ void G_DoLoadGame(void)
     int a, b, c;
     char savestr[SAVESTRINGSIZE];
     char vcheck[VERSIONSIZE], readversion[VERSIONSIZE];
+    const player_t *p; // [crispy]
+
+    p = &players[consoleplayer]; // [crispy]
 
     gameaction = ga_nothing;
 
@@ -1718,15 +2183,29 @@ void G_DoLoadGame(void)
     P_UnArchiveWorld();
     P_UnArchiveThinkers();
     P_UnArchiveSpecials();
+    P_RestoreTargets();
+
+    // [crispy] point to active artifact after load
+    for (i = 0; i < p->inventorySlotNum; i++)
+    {
+        if (p->inventory[i].type == p->readyArtifact)
+        {
+            curpos = inv_ptr = i;
+            curpos = (curpos > CURPOS_MAX) ? CURPOS_MAX : curpos;
+            break;
+        }
+    }
 
     if (SV_ReadByte() != SAVE_GAME_TERMINATOR)
     {                           // Missing savegame termination marker
         I_Error("Bad savegame");
     }
 
+    // [crispy] read more extended savegame data
+    P_ReadExtendedSaveGameData();
+
     SV_Close();
 }
-
 
 /*
 ====================
@@ -1748,6 +2227,14 @@ void G_DeferedInitNew(skill_t skill, int episode, int map)
     d_episode = episode;
     d_map = map;
     gameaction = ga_newgame;
+
+    // [crispy] if a new game is started during demo recording, start a new demo
+    if (demorecording)
+    {
+	G_CheckDemoStatus();
+	Z_Free(demoname);
+	G_RecordDemo(d_skill, 1, d_episode, d_map, orig_demoname);
+    }
 }
 
 void G_DoNewGame(void)
@@ -1760,9 +2247,14 @@ void G_InitNew(skill_t skill, int episode, int map)
 {
     int i;
     int speed;
-    static const char *skyLumpNames[5] = {
-        "SKY1", "SKY2", "SKY3", "SKY1", "SKY3"
+    // [crispy] Support for sky textures from H+H IWAD.
+    static const char *skyLumpNames[2][5] = {
+        { "SKY1", "SKY2", "SKY3", "SKY1", "SKY3" },
+        { "SKY1", "SKY2", "SKY3", "SKY4", "SKY5" }
     };
+    const boolean RemasterSky = (R_CheckTextureNumForName(DEH_String("SKY4")) != -1)
+                             && (R_CheckTextureNumForName(DEH_String("SKY5")) != -1);
+    const char *ep6Sky = DEH_String(RemasterSky ? "SKY6" : "SKY1");
 
     if (paused)
     {
@@ -1792,7 +2284,7 @@ void G_InitNew(skill_t skill, int episode, int map)
         respawnmonsters = false;
     }
     // Set monster missile speeds
-    speed = skill == sk_nightmare;
+    speed = skill == sk_nightmare || critical->fast;
     for (i = 0; MonsterMissileInfo[i].type != -1; i++)
     {
         mobjinfo[MonsterMissileInfo[i].type].speed
@@ -1816,14 +2308,20 @@ void G_InitNew(skill_t skill, int episode, int map)
     gameskill = skill;
     BorderNeedRefresh = true;
 
+    // [crispy] total time for all completed levels
+    totalleveltimes = 0;
+
+    // [crispy] track intermission at end of episode
+    finalintermission = false;
+
     // Set the sky map
     if (episode > 5)
     {
-        skytexture = R_TextureNumForName(DEH_String("SKY1"));
+        skytexture = R_TextureNumForName(ep6Sky);
     }
     else
     {
-        skytexture = R_TextureNumForName(DEH_String(skyLumpNames[episode - 1]));
+        skytexture = R_TextureNumForName(DEH_String(skyLumpNames[RemasterSky][episode - 1]));
     }
 
 //
@@ -1946,6 +2444,8 @@ void G_WriteDemoTiccmd(ticcmd_t * cmd)
 
     if (demo_p > demoend - 16)
     {
+        // [crispy] unconditionally disable savegame and demo limits
+        /*
         if (vanilla_demo_limit)
         {
             // no more space
@@ -1953,6 +2453,7 @@ void G_WriteDemoTiccmd(ticcmd_t * cmd)
             return;
         }
         else
+        */
         {
             // Vanilla demo limit disabled: unlimited
             // demo lengths!
@@ -1981,6 +2482,16 @@ void G_RecordDemo(skill_t skill, int numplayers, int episode, int map,
     int i;
     int maxsize;
 
+    // [crispy] demo file name suffix counter
+    static unsigned int j = 0;
+    FILE *fp = NULL;
+
+    // [crispy] the name originally chosen for the demo, i.e. without "-00000"
+    if (!orig_demoname)
+    {
+	orig_demoname = name;
+    }
+
     //!
     // @category demo
     //
@@ -1997,17 +2508,25 @@ void G_RecordDemo(skill_t skill, int numplayers, int episode, int map,
     //!
     // @category demo
     //
-    // Smooth out low resolution turning when recording a demo.
+    // Don't smooth out low resolution turning when recording a demo.
     //
 
-    shortticfix = M_ParmExists("-shortticfix");
+    shortticfix = (!M_ParmExists("-noshortticfix"));
+    //[crispy] make shortticfix the default
 
     G_InitNew(skill, episode, map);
     usergame = false;
-    demoname_size = strlen(name) + 5;
+    demoname_size = strlen(name) + 5 + 6; // [crispy] + 6 for "-00000"
     demoname = Z_Malloc(demoname_size, PU_STATIC, NULL);
     M_snprintf(demoname, demoname_size, "%s.lmp", name);
     maxsize = 0x20000;
+
+    // [crispy] prevent overriding demos by adding a file name suffix
+    for ( ; j <= 99999 && (fp = fopen(demoname, "rb")) != NULL; j++)
+    {
+	M_snprintf(demoname, demoname_size, "%s-%05d.lmp", name, j);
+	fclose (fp);
+    }
 
     //!
     // @arg <size>
@@ -2070,6 +2589,13 @@ void G_DeferedPlayDemo(const char *name)
 {
     defdemoname = name;
     gameaction = ga_playdemo;
+
+    // [crispy] fast-forward demo up to the desired map
+    if (crispy->demowarp)
+    {
+        nodrawers = true;
+        singletics = true;
+    }
 }
 
 void G_DoPlayDemo(void)
@@ -2175,6 +2701,132 @@ void G_TimeDemo(char *name)
     }
 }
 
+#define DEMO_FOOTER_SEPARATOR "\n"
+#define NUM_DEMO_FOOTER_LUMPS 4
+
+static size_t WriteCmdLineLump(MEMFILE *stream)
+{
+    int i;
+    long pos;
+    char *tmp, **filenames;
+
+    filenames = W_GetWADFileNames();
+
+    pos = mem_ftell(stream);
+
+    tmp = M_StringJoin("-iwad \"", M_BaseName(filenames[0]), "\"", NULL);
+    mem_fputs(tmp, stream);
+    free(tmp);
+
+    if (filenames[1])
+    {
+        mem_fputs(" -file", stream);
+
+        for (i = 1; filenames[i]; i++)
+        {
+            tmp = M_StringJoin(" \"", M_BaseName(filenames[i]), "\"", NULL);
+            mem_fputs(tmp, stream);
+            free(tmp);
+        }
+    }
+
+    filenames = DEH_GetFileNames();
+
+    if (filenames)
+    {
+        mem_fputs(" -deh", stream);
+
+        for (i = 0; filenames[i]; i++)
+        {
+            tmp = M_StringJoin(" \"", M_BaseName(filenames[i]), "\"", NULL);
+            mem_fputs(tmp, stream);
+            free(tmp);
+        }
+    }
+
+    mem_fputs(" -complevel 0", stream);
+
+    if (M_CheckParm("-solo-net"))
+    {
+        mem_fputs(" -solo-net", stream);
+    }
+
+    if (M_CheckParm("-coop_spawns"))
+    {
+        mem_fputs(" -coop_spawns", stream);
+    }
+
+    return mem_ftell(stream) - pos;
+}
+
+static long WriteFileInfo(const char *name, size_t size, long filepos,
+                          MEMFILE *stream)
+{
+    filelump_t fileinfo = { 0 };
+
+    fileinfo.filepos = LONG(filepos);
+    fileinfo.size = LONG(size);
+
+    if (name)
+    {
+        size_t len = strnlen(name, 8);
+        if (len < 8)
+        {
+            len++;
+        }
+        memcpy(fileinfo.name, name, len);
+    }
+
+    mem_fwrite(&fileinfo, 1, sizeof(fileinfo), stream);
+
+    filepos += size;
+    return filepos;
+}
+
+static void G_AddDemoFooter(void)
+{
+    byte *data;
+    size_t size;
+    long filepos;
+    char *project_string;
+
+    MEMFILE *stream = mem_fopen_write();
+
+    wadinfo_t header = { "PWAD" };
+    header.numlumps = LONG(NUM_DEMO_FOOTER_LUMPS);
+    mem_fwrite(&header, 1, sizeof(header), stream);
+
+    project_string = M_StringReplace(PACKAGE_STRING, "Doom", "Heretic");
+
+    mem_fputs(project_string, stream);
+    mem_fputs(DEMO_FOOTER_SEPARATOR, stream);
+    size = WriteCmdLineLump(stream);
+    mem_fputs(DEMO_FOOTER_SEPARATOR, stream);
+
+    header.infotableofs = LONG(mem_ftell(stream));
+    mem_fseek(stream, 0, MEM_SEEK_SET);
+    mem_fwrite(&header, 1, sizeof(header), stream);
+    mem_fseek(stream, 0, MEM_SEEK_END);
+
+    filepos = sizeof(wadinfo_t);
+    filepos = WriteFileInfo("PORTNAME", strlen(project_string), filepos, stream);
+    filepos = WriteFileInfo(NULL, strlen(DEMO_FOOTER_SEPARATOR), filepos, stream);
+    filepos = WriteFileInfo("CMDLINE", size, filepos, stream);
+    WriteFileInfo(NULL, strlen(DEMO_FOOTER_SEPARATOR), filepos, stream);
+
+    mem_get_buf(stream, (void **)&data, &size);
+
+    while (demo_p > demoend - size)
+    {
+        IncreaseDemoBuffer();
+    }
+
+    memcpy(demo_p, data, size);
+    demo_p += size;
+
+    free(project_string);
+    mem_fclose(stream);
+}
 
 /*
 ===================
@@ -2216,10 +2868,19 @@ boolean G_CheckDemoStatus(void)
     if (demorecording)
     {
         *demo_p++ = DEMOMARKER;
+        G_AddDemoFooter();
         M_WriteFile(demoname, demobuffer, demo_p - demobuffer);
         Z_Free(demobuffer);
         demorecording = false;
+        // [crispy] if a new game is started during demo recording, start a new demo
+        if (gameaction != ga_newgame)
+        {
         I_Error("Demo %s recorded", demoname);
+        }
+        else
+        {
+            fprintf(stderr, "Demo %s recorded\n", demoname);
+        }
     }
 
     return false;
@@ -2282,6 +2943,8 @@ void G_DoSaveGame(void)
     P_ArchiveThinkers();
     P_ArchiveSpecials();
     SV_WriteSaveGameEOF();
+    // [crispy] write extended savegame data
+    P_WriteExtendedSaveGameData();
     SV_Close();
 
     gameaction = ga_nothing;

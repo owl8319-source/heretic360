@@ -146,6 +146,7 @@ boolean P_SeekerMissile(mobj_t * actor, angle_t thresh, angle_t turnMax);
 void P_MobjThinker(thinker_t *thinker);
 void P_BlasterMobjThinker(thinker_t *thinker);
 void P_SpawnPuff(fixed_t x, fixed_t y, fixed_t z);
+void P_SpawnPuffSafe(fixed_t x, fixed_t y, fixed_t z, boolean safe);
 void P_SpawnBlood(fixed_t x, fixed_t y, fixed_t z, int damage);
 void P_BloodSplatter(fixed_t x, fixed_t y, fixed_t z, mobj_t * originator);
 void P_RipperBlood(mobj_t * mo);
@@ -185,7 +186,8 @@ typedef struct
 } intercept_t;
 
 #define	MAXINTERCEPTS	128
-extern intercept_t intercepts[MAXINTERCEPTS], *intercept_p;
+extern intercept_t *intercepts, *intercept_p; // [crispy] remove INTERCEPTS limit
+extern void check_intercept(void); // [crispy] remove INTERCEPTS limit
 typedef boolean(*traverser_t) (intercept_t * in);
 
 
@@ -244,15 +246,15 @@ void P_LineAttack(mobj_t * t1, angle_t angle, fixed_t distance, fixed_t slope,
 void P_RadiusAttack(mobj_t * spot, mobj_t * source, int damage);
 
 #define	MAXSPECIALCROSS		8
-extern line_t *spechit[MAXSPECIALCROSS];
+extern line_t **spechit; // [crispy] remove SPECHIT limit
 extern int numspechit;
 
 
 // ***** P_SETUP *****
 
 extern byte *rejectmatrix;      // for fast sight rejection
-extern short *blockmaplump;     // offsets in blockmap are from here
-extern short *blockmap;
+extern int32_t *blockmaplump;   // offsets in blockmap are from here // [crispy] BLOCKMAP limit
+extern int32_t *blockmap;       // [crispy] BLOCKMAP limit
 extern int bmapwidth, bmapheight;       // in mapblocks
 extern fixed_t bmaporgx, bmaporgy;      // origin of block map
 extern mobj_t **blocklinks;     // for thing chains
@@ -266,6 +268,7 @@ extern boolean messageson;
 
 
 void P_SetMessage(player_t * player, const char *message, boolean ultmsg);
+void P_SetCenterMessage(player_t * player, const char *message); // [crispy] Set centered message
 void P_TouchSpecialThing(mobj_t * special, mobj_t * toucher);
 void P_DamageMobj(mobj_t * target, mobj_t * inflictor, mobj_t * source,
                   int damage);

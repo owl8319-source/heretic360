@@ -132,6 +132,18 @@ static default_t	doom_defaults_list[] =
     CONFIG_VARIABLE_INT(mouse_sensitivity),
 
     //!
+    // Horizontal mouse sensitivity (strafe)
+    //
+
+    CONFIG_VARIABLE_INT(mouse_sensitivity_x2),
+
+    //!
+    // Vertical mouse sensitivity
+    //
+
+    CONFIG_VARIABLE_INT(mouse_sensitivity_y),
+
+    //!
     // Volume of sound effects, range 0-15.
     //
 
@@ -195,16 +207,40 @@ static default_t	doom_defaults_list[] =
     CONFIG_VARIABLE_KEY(key_down),
 
     //!
+    // Keyboard key to move forward (alternative).
+    //
+
+    CONFIG_VARIABLE_KEY(key_alt_up),
+
+    //!
+    // Keyboard key to move backward (alternative).
+    //
+
+    CONFIG_VARIABLE_KEY(key_alt_down),
+
+    //!
     // Keyboard key to strafe left.
     //
 
     CONFIG_VARIABLE_KEY(key_strafeleft),
 
     //!
+    // Keyboard key to strafe left (alternative).
+    //
+
+    CONFIG_VARIABLE_KEY(key_alt_strafeleft),
+
+    //!
     // Keyboard key to strafe right.
     //
 
     CONFIG_VARIABLE_KEY(key_straferight),
+
+    //!
+    // Keyboard key to strafe right (alternative).
+    //
+
+    CONFIG_VARIABLE_KEY(key_alt_straferight),
 
     //!
     // @game strife
@@ -417,6 +453,12 @@ static default_t	doom_defaults_list[] =
     CONFIG_VARIABLE_KEY(key_speed),
 
     //!
+    // Keyboard key to fast-forward through a demo.
+    //
+
+    CONFIG_VARIABLE_KEY(key_demospeed),
+
+    //!
     // If non-zero, mouse input is enabled.  If zero, mouse input is
     // disabled.
     //
@@ -456,6 +498,22 @@ static default_t	doom_defaults_list[] =
     //
 
     CONFIG_VARIABLE_INT(mouseb_jump),
+
+    //!
+    // @game doom
+    //
+    // Mouse button to enable free looking.
+    //
+
+    CONFIG_VARIABLE_INT(mouseb_mouselook),
+
+    //!
+    // @game doom heretic hexen strife
+    //
+    // Quick 180° reverse.
+    //
+
+    CONFIG_VARIABLE_INT(mouseb_reverse),
 
     //!
     // If non-zero, joystick input is enabled.
@@ -843,6 +901,22 @@ static default_t extra_defaults_list[] =
     CONFIG_VARIABLE_INT(png_screenshots),
 
     //!
+    // Vertical mouse acceleration factor.  When the speed of mouse movement
+    // exceeds the threshold value (mouse_threshold), the speed is
+    // multiplied by this value.
+    //
+
+    CONFIG_VARIABLE_FLOAT(mouse_acceleration_y),
+
+    //!
+    // Vertical mouse acceleration threshold.  When the speed of mouse movement
+    // exceeds this threshold value, the speed is multiplied by an
+    // acceleration factor (mouse_acceleration).
+    //
+
+    CONFIG_VARIABLE_INT(mouse_threshold_y),
+
+    //!
     // Sound output sample rate, in Hz.  Typical values to use are
     // 11025, 22050, 44100 and 48000.
     //
@@ -1072,7 +1146,7 @@ static default_t extra_defaults_list[] =
     CONFIG_VARIABLE_STRING(winmm_midi_device),
 
     //!
-    // Compatibility level for native Windows MIDI, default 0. Valid values are
+    // Compatibility level for native Windows MIDI, default 1. Valid values are
     // 0 (Vanilla), 1 (Standard), 2 (Full).
     //
 
@@ -1121,6 +1195,59 @@ static default_t extra_defaults_list[] =
     //
 
     CONFIG_VARIABLE_INT(vanilla_keyboard_mapping),
+
+    //!
+    // @game strife
+    //
+    // By default, pressing "run" centers the view in Strife. This behavior can
+    // be toggled with this setting.
+    //
+
+    CONFIG_VARIABLE_INT(runcentering),
+
+    //!
+    // If zero, this disables sectors changing their light level.
+    //
+
+    CONFIG_VARIABLE_INT(a11y_sector_lighting),
+
+    //!
+    // Amount of extra light to add to the game scene.
+    //
+
+    CONFIG_VARIABLE_INT(a11y_extra_lighting),
+
+    //!
+    // If zero, this disables weapon flashes changing the ambient light
+    // level and flickering of torches.
+    //
+
+    CONFIG_VARIABLE_INT(a11y_weapon_flash),
+
+    //!
+    // If zero, this disables weapon palette changes 
+    //
+
+    CONFIG_VARIABLE_INT(a11y_weapon_palette),
+
+    //!
+    // If zero, this disables rendering of weapon flashes sprites.
+    //
+
+    CONFIG_VARIABLE_INT(a11y_weapon_pspr),
+
+    //!
+    // If zero, this disables palette changes upon damage, item pickup,
+    // or when wearing the radiation suit.
+    //
+
+    CONFIG_VARIABLE_INT(a11y_palette_changes),
+
+    //!
+    // If zero, this disables colormap changes during invulnerability.
+    //
+
+    CONFIG_VARIABLE_INT(a11y_invul_colormap),
 
     //!
     // Name to use in network games for identification.  This is only
@@ -1232,6 +1359,14 @@ static default_t extra_defaults_list[] =
     //
 
     CONFIG_VARIABLE_INT(mouseb_useartifact),
+
+    //!
+    // @game strife
+    //
+    // Mouse button to use inventory item.
+    //
+
+    CONFIG_VARIABLE_INT(mouseb_invuse),
 
     //!
     // If non-zero, double-clicking a mouse button acts like pressing
@@ -1700,6 +1835,18 @@ static default_t extra_defaults_list[] =
     CONFIG_VARIABLE_KEY(key_spy),
 
     //!
+    // Keyboard shortcut to go to next level.
+    //
+
+    CONFIG_VARIABLE_KEY(key_menu_nextlevel),
+
+    //!
+    // Keyboard shortcut to restart current level or demo.
+    //
+
+    CONFIG_VARIABLE_KEY(key_menu_reloadlevel),
+
+    //!
     // Keyboard shortcut to increase the screen size.
     //
 
@@ -1716,6 +1863,18 @@ static default_t extra_defaults_list[] =
     //
 
     CONFIG_VARIABLE_KEY(key_menu_screenshot),
+
+    //!
+    // Keyboard shortcut to save a clean screenshot.
+    //
+
+    CONFIG_VARIABLE_KEY(key_menu_cleanscreenshot),
+
+    //!
+    // Key to delete a savegame.
+    //
+
+    CONFIG_VARIABLE_KEY(key_menu_del),
 
     //!
     // Key to toggle the map view.
@@ -1788,6 +1947,42 @@ static default_t extra_defaults_list[] =
     //
 
     CONFIG_VARIABLE_KEY(key_map_clearmark),
+
+    //!
+    // Key to toggle the overlay mode when in the map view.
+    //
+
+    CONFIG_VARIABLE_KEY(key_map_overlay),
+
+    //!
+    // Key to toggle the rotate mode when in the map view.
+    //
+
+    CONFIG_VARIABLE_KEY(key_map_rotate),
+
+    //!
+    // Mouse button to zoom in when in the map view.
+    //
+
+    CONFIG_VARIABLE_INT(mouseb_mapzoomin),
+
+    //!
+    // Mouse button to zoom out when in the map view.
+    //
+
+    CONFIG_VARIABLE_INT(mouseb_mapzoomout),
+
+    //!
+    // Mouse button to zoom out the max amount when in the map view.
+    //
+
+    CONFIG_VARIABLE_INT(mouseb_mapmaxzoom),
+
+    //!
+    // Mouse button to toggle follow mode when in the map view.
+    //
+
+    CONFIG_VARIABLE_INT(mouseb_mapfollow),
 
     //!
     // Key to select weapon 1.
@@ -2066,6 +2261,404 @@ static default_t extra_defaults_list[] =
     //
 
     CONFIG_VARIABLE_KEY(key_multi_msgplayer8),
+
+    //!
+    // @game doom heretic hexen strife
+    // Quick 180° reverse.
+    //
+
+    CONFIG_VARIABLE_KEY(key_reverse),
+
+    //!
+    // @game doom
+    // Toggle always run.
+    //
+
+    CONFIG_VARIABLE_KEY(key_toggleautorun),
+
+    //!
+    // @game doom heretic
+    // Toggle vertical mouse movement.
+    //
+
+    CONFIG_VARIABLE_KEY(key_togglenovert),
+
+    //!
+    // @game doom
+    // Invert vertical mouse movement.
+    //
+
+    CONFIG_VARIABLE_KEY(mouse_y_invert),
+
+    //!
+    // @game doom
+    //
+    // Automap overlay mode.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_automapoverlay),
+
+    //!
+    // @game doom
+    //
+    // Automap rotate mode.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_automaprotate),
+
+    //!
+    // @game doom
+    //
+    // Show additional level statistics.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_automapstats),
+
+    //!
+    // @game doom
+    //
+    // Variable player view bob.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_bobfactor),
+
+    //!
+    // @game doom
+    //
+    // "Use" button timer.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_btusetimer),
+
+    //!
+    // @game doom
+    //
+    // Apply brightmaps to select textures and sprites.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_brightmaps),
+
+    //!
+    // @game doom
+    //
+    // Center Weapon when Firing.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_centerweapon),
+
+    //!
+    // @game doom
+    //
+    // Enable Colored Blood.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_coloredblood),
+
+    //!
+    // @game doom
+    //
+    // Show colored numbers in the status bar.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_coloredhud),
+
+    //!
+    // @game doom, heretic, hexen, strife
+    //
+    // Draw a crosshair.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_crosshair),
+
+    //!
+    // @game doom, strife
+    //
+    // Crosshair Color indicates Health.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_crosshairhealth),
+
+    //!
+    // @game doom
+    //
+    // Highlight Crosshair on target.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_crosshairtarget),
+
+    //!
+    // @game doom, heretic, hexen
+    //
+    // Crosshair type.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_crosshairtype),
+
+    //!
+    // @game heretic, hexen
+    //
+    // Crosshair color.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_crosshaircolor),
+
+    //!
+    // @game doom heretic hexen
+    //
+    // Default difficulty when starting a new game.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_defaultskill),
+
+    //!
+    // @game doom
+    //
+    // Show a progress bar when playing back a demo.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_demobar),
+
+    //!
+    // @game doom
+    //
+    // Show a timer when recording or playing pack demos.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_demotimer),
+
+    //!
+    // @game doom
+    //
+    // Timer direction whan playing back a demo.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_demotimerdir),
+
+    //!
+    // @game doom
+    //
+    // Extended Automap.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_extautomap),
+
+    //!
+    // @game doom
+    //
+    // Enable Mirrored Corpses.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_flipcorpses),
+
+    //!
+    // @game doom heretic hexen
+    //
+    // Limit framerate to this value in frames per second.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_fpslimit),
+
+    //!
+    // @game doom
+    //
+    // Enable vertical aiming.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_freeaim),
+
+    //!
+    // @game doom
+    //
+    // Enable looking up and down.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_freelook),
+
+    //!
+    // @game doom heretic hexen strife
+    //
+    // Crispy's variable to support intermediate and negative gamma levels.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_gamma),
+
+    //!
+    // @game doom
+    //
+    // High Resolution Rendering.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_hires),
+
+    //!
+    // @game doom
+    //
+    // Enable jumping.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_jump),
+
+    //!
+    // @game doom
+    //
+    // Show level time.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_leveltime),
+
+    //!
+    // @game doom
+    //
+    // Use the mouse to look up and down.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_mouselook),
+
+    //!
+    // @game doom
+    //
+    // Negative player health.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_neghealth),
+
+    //!
+    // @game doom
+    //
+    // Players may walk over and under shootable things.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_overunder),
+
+    //!
+    // @game doom
+    //
+    // Enable weapon recoil pitch.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_pitch),
+
+    //!
+    // @game doom
+    //
+    // Show player coordinates.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_playercoords),
+
+    //!
+    // @game doom
+    //
+    // Show a centered message and play a sound when a secret is found.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_secretmessage),
+
+    //!
+    // @game doom
+    //
+    // Smooth Diminishing Lighting.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_smoothlight),
+
+    //!
+    // @game doom
+    //
+    // Smooth Lines on Automap.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_smoothmap),
+
+    //!
+    // @game doom
+    //
+    // Smooth Scaling.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_smoothscaling),
+
+    //!
+    // @game doom
+    //
+    // Misc. sound fixes.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_soundfix),
+
+    //!
+    // @game doom
+    //
+    // Play sounds in full length.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_soundfull),
+
+    //!
+    // @game doom
+    //
+    // Mono sound effects.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_soundmono),
+
+    //!
+    // @game heretic
+    //
+    // Level Weapon Sounds
+    //
+
+    CONFIG_VARIABLE_INT(crispy_lvlwpnsnd),
+
+    //!
+    // @game doom
+    //
+    // Level Stats Format.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_statsformat),
+
+    //!
+    // @game doom heretic hexen strife
+    //
+    // Enable translucency.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_translucency),
+
+#ifdef CRISPY_TRUECOLOR
+    //!
+    // @game doom
+    //
+    // Enable true-color rendering (experimental).
+    //
+
+    CONFIG_VARIABLE_INT(crispy_truecolor),
+#endif
+
+    //!
+    // @game doom
+    //
+    // Uncapped Framerate.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_uncapped),
+
+    //!
+    // @game doom
+    //
+    // Enable VSync.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_vsync),
+
+    //!
+    // @game doom
+    //
+    // Widescreen rendering.
+    //
+
+    CONFIG_VARIABLE_INT(crispy_widescreen),
 };
 
 static default_collection_t extra_defaults =
@@ -2783,7 +3376,7 @@ char *M_GetSaveGameDir(const char *iwadname)
 // Calculate the path to the directory for autoloaded WADs/DEHs.
 // Creates the directory as necessary.
 //
-char *M_GetAutoloadDir(const char *iwadname)
+char *M_GetAutoloadDir(const char *iwadname, boolean makedir)
 {
     char *result;
 
@@ -2803,7 +3396,10 @@ char *M_GetAutoloadDir(const char *iwadname)
     M_MakeDirectory(autoload_path);
 
     result = M_StringJoin(autoload_path, DIR_SEPARATOR_S, iwadname, NULL);
+    if (makedir) // [crispy] make subdirectory creation optional
+    {
     M_MakeDirectory(result);
+    }
 
     // TODO: Add README file
 

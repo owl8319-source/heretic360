@@ -335,6 +335,10 @@ void MN_DrTextA(const char *text, int x, int y)
     char c;
     patch_t *p;
 
+#ifdef HERETIC360
+    V_SetDrawText(text);
+#endif
+
     while ((c = *text++) != 0)
     {
         if (c < 33)
@@ -348,6 +352,10 @@ void MN_DrTextA(const char *text, int x, int y)
             x += SHORT(p->width) - 1;
         }
     }
+
+#ifdef HERETIC360
+    V_SetDrawText(NULL);
+#endif
 }
 
 //---------------------------------------------------------------------------
@@ -393,6 +401,10 @@ void MN_DrTextB(const char *text, int x, int y)
     char c;
     patch_t *p;
 
+#ifdef HERETIC360
+    V_SetDrawText(text);
+#endif
+
     while ((c = *text++) != 0)
     {
         if (c < 33)
@@ -406,6 +418,10 @@ void MN_DrTextB(const char *text, int x, int y)
             x += SHORT(p->width) - 1;
         }
     }
+
+#ifdef HERETIC360
+    V_SetDrawText(NULL);
+#endif
 }
 
 //---------------------------------------------------------------------------

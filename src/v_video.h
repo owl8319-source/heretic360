@@ -55,6 +55,10 @@ void V_CopyRect(int srcx, int srcy, pixel_t *source,
                 int destx, int desty);
 
 void V_DrawPatch(int x, int y, patch_t *patch);
+#ifdef HERETIC360
+// Heretic 360: names the menu text being drawn, for the log's note on a patch off the screen (v_video.c).
+void V_SetDrawText(const char *text);
+#endif
 void V_DrawPatchFlipped(int x, int y, patch_t *patch);
 void V_DrawTLPatch(int x, int y, patch_t *patch);
 void V_DrawAltTLPatch(int x, int y, patch_t * patch);

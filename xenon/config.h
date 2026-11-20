@@ -6,7 +6,7 @@
 #define PACKAGE_NAME "Chocolate Doom"
 #define PACKAGE_TARNAME "chocolate-doom"
 #define PACKAGE_VERSION "3.1.1"
-#define PACKAGE_STRING "Heretic 360 0.5 (Chocolate Doom 3.1.1)"
+#define PACKAGE_STRING "Heretic 360 0.6 (Chocolate Doom 3.1.1)"
 #define PROGRAM_PREFIX "chocolate-"
 
 // newlib has <dirent.h> and declares strcasecmp and strncasecmp in <strings.h>.

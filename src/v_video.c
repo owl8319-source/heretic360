@@ -138,6 +138,44 @@ void V_SetPatchClipCallback(vpatchclipfunc_t func)
 // Masks a column based masked pic to the screen. 
 //
 
+
+#ifdef HERETIC360
+// Heretic 360: a patch drawn off the screen is skipped and noted in the log, not the end of the game: Chocolate
+// Doom's range check would I_Error. The note gives where it was drawn, its size, the menu text being drawn if any
+// (V_SetDrawText) and the code address that drew it, for powerpc-xsdk-elf-addr2line.
+
+static const char *draw_text = NULL;
+static int offscreen_reports = 0;
+
+void V_SetDrawText(const char *text)
+{
+    draw_text = text;
+}
+
+static boolean PatchOffScreen(const char *what, int x, int y, patch_t *patch, void *caller)
+{
+    if (x >= 0 && x + SHORT(patch->width) <= SCREENWIDTH && y >= 0 && y + SHORT(patch->height) <= SCREENHEIGHT)
+    {
+        return false;
+    }
+
+    if (offscreen_reports < 20)
+    {
+        offscreen_reports++;
+        printf("heretic360: %s off the screen, skipped: at %i,%i, %ix%i, offsets %i,%i, drawn from %p",
+               what, x, y, SHORT(patch->width), SHORT(patch->height), SHORT(patch->leftoffset),
+               SHORT(patch->topoffset), caller);
+        if (draw_text != NULL)
+        {
+            printf(", text \"%s\"", draw_text);
+        }
+        printf("\n");
+    }
+
+    return true;
+}
+#endif
+
 void V_DrawPatch(int x, int y, patch_t *patch)
 { 
     int count;
@@ -158,7 +196,12 @@ void V_DrawPatch(int x, int y, patch_t *patch)
             return;
     }
 
-#ifdef RANGECHECK
+#if defined(HERETIC360)
+    if (PatchOffScreen("V_DrawPatch", x, y, patch, __builtin_return_address(0)))
+    {
+        return;
+    }
+#elif defined(RANGECHECK)
     if (x < 0
      || x + SHORT(patch->width) > SCREENWIDTH
      || y < 0
@@ -222,7 +265,12 @@ void V_DrawPatchFlipped(int x, int y, patch_t *patch)
             return;
     }
 
-#ifdef RANGECHECK 
+#if defined(HERETIC360)
+    if (PatchOffScreen("V_DrawPatchFlipped", x, y, patch, __builtin_return_address(0)))
+    {
+        return;
+    }
+#elif defined(RANGECHECK)
     if (x < 0
      || x + SHORT(patch->width) > SCREENWIDTH
      || y < 0

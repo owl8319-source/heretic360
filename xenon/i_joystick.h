@@ -14,6 +14,11 @@
 // (src/heretic/devmenu.c). Past the buttons the joyb* variables name.
 #define JOY_DEV_COMBO_BUTTON 12
 
+// Heretic 360: the map's buttons while it's up (heretic/am_map.c).
+#define JOY_MAP_ZOOM_OUT_BUTTON 15
+#define JOY_MAP_ZOOM_IN_BUTTON 16
+#define JOY_MAP_FOLLOW_BUTTON 17
+
 // Directional input in an ev_joystick's data6, as the menus read it.
 #define DPAD_SHIFT 0
 #define LSTICK_SHIFT 4
@@ -36,6 +41,15 @@ extern int use_analog;
 extern int joystick_turn_sensitivity;
 extern int joystick_move_sensitivity;
 extern int joystick_look_sensitivity;
+
+// Heretic 360: the Controller menu's settings (heretic/mn_menu.c), kept in crispy-heretic.cfg.
+extern int joystick_look_invert;
+extern int joystick_dead_zone;
+extern int joystick_always_run;
+extern int joystick_vibration;
+
+// Heretic 360: shakes the controller, strength 0 to 100, for about ms milliseconds, if vibration is on.
+void I_Rumble(int strength, int ms);
 
 void I_InitJoystick(void);
 void I_ShutdownJoystick(void);

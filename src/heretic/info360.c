@@ -20,7 +20,7 @@
 
 // The list under the controller: two columns, the button then what it does.
 #define LIST_TOP 126
-#define LIST_ROW 10
+#define LIST_ROW 9
 #define LEFT_BUTTON_X 6
 #define LEFT_ACTION_X 73
 #define RIGHT_BUTTON_X 166
@@ -40,6 +40,7 @@ static const control_t left_column[] = {
     { "D-PAD UP", "USE ITEM" },
     { "BACK",     "MAP" },
     { "START",    "MENU" },
+    { "L CLICK",  "WALK / RUN" },
 };
 
 static const control_t right_column[] = {
@@ -47,9 +48,10 @@ static const control_t right_column[] = {
     { "RB",       "NEXT WEAPON" },
     { "R STICK",  "TURN / LOOK" },
     { "R CLICK",  "CENTER VIEW" },
-    { "A",        "USE" },
+    { "A",        "USE / JUMP" },
     { "X",        "USE ITEM" },
     { "Y / B",    "FLY UP / DOWN" },
+    { "LB / RB",  "MAP ZOOM" },
 };
 
 // Names beside the shoulder buttons on the drawing.

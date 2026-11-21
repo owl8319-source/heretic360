@@ -17,6 +17,9 @@
 // P_pspr.c
 
 #include "doomdef.h"
+#ifdef HERETIC360
+#include "i_joystick.h"
+#endif
 #include "i_system.h"
 #include "m_random.h"
 #include "p_local.h"
@@ -552,6 +555,30 @@ void P_FireWeapon(player_t * player)
     {                           // Play the sound for the initial gauntlet attack
         S_StartSound(player->mo, sfx_gntuse);
     }
+#ifdef HERETIC360
+    // Heretic 360: a kick for each attack, as strong as the weapon, stronger with the Tome of Power.
+    if (player == &players[consoleplayer] && !demoplayback)
+    {
+        static const int kick[NUMWEAPONS][2] = {
+            // strength, milliseconds
+            {25, 80},    // staff
+            {20, 70},    // elven wand
+            {35, 110},   // ethereal crossbow
+            {30, 90},    // dragon claw
+            {40, 120},   // hellstaff
+            {60, 180},   // phoenix rod
+            {45, 130},   // firemace
+            {15, 60},    // gauntlets
+            {10, 50},    // chicken's beak
+        };
+        const int weapon = player->readyweapon;
+
+        if (weapon >= 0 && weapon < NUMWEAPONS)
+        {
+            I_Rumble(kick[weapon][0] + (player->powers[pw_weaponlevel2] ? 15 : 0), kick[weapon][1]);
+        }
+    }
+#endif
 }
 
 //---------------------------------------------------------------------------

@@ -49,16 +49,27 @@ curl.exe ftp://<console>/Hdd1/Homebrew/Heretic/heretic.log --user '<user>:<passw
 | Left stick | move and strafe | Left stick or D-pad | choose; left / right change an option |
 | Right stick | turn and look up or down | A | select (yes, on the quit question) |
 | RT | fire | B | back (no, on the quit question) |
-| LT or A | use (doors, switches) | Start | open the menu |
-| LB / RB | previous / next weapon | LB / RB | previous / next page (saves, Crispness) |
-| D-pad left / right | move through the inventory | | |
-| D-pad up or X | use the chosen artifact | | |
-| Y / B | fly up / down (Wings of Wrath) | | |
+| LT | use (doors, switches) | Start | open the menu |
+| A | use, or jump with jumping on | LB / RB | previous / next page (saves, Crispness) |
+| LB / RB | previous / next weapon | **On the map** | |
+| D-pad left / right | move through the inventory | LB / RB | zoom out / in |
+| D-pad up or X | use the chosen artifact | Right stick click | follow the player, or not |
+| Y / B | fly up / down (Wings of Wrath) | Left stick | scroll the map, when not following |
+| Left stick click | walk (or run, with always run off) | | |
 | Right stick click | centre the view, stop flying | | |
 | Back | map | | |
 | Start | menu | | |
 
-The game always runs; push the stick part way to walk. The main menu's INFO shows these controls on a picture of the
+**Options > Controller** sets the turn and look speeds, the sticks' dead zone, **invert Y axis**, **always run** (on
+as the game starts; push the stick part way, or click it, to walk) and **vibration** (firing, getting hurt, picking
+things up). **Options > Crispness > page 3 > Jumping** turns jumping on, low or high, as in Crispy Doom; it's off in
+demos and network games.
+
+Naming a save opens the console's own keyboard, the level's name in it to start with. If it can't open (with no
+profile signed in, it may not), A saves under the name shown. Opening the Guide during a level opens the game's
+menu, which pauses the game.
+
+The main menu's INFO shows these controls on a picture of the
 controller, then Raven's credits, in place of the PC's two keyboard pages. The controller picture is Alphathon's
 "360 controller.svg" from Wikimedia Commons (CC BY-SA 3.0), changed a little; see `art/README.md`.
 
@@ -95,7 +106,7 @@ frame-rate counter shows it; high resolution off is about a quarter of the drawi
 
 - **Does:** the whole game with Crispy's options; sound effects; music, as Heretic sounded on a Sound Blaster (AdLib
   OPL, emulated by Nuked OPL3); the controller; settings and saves; a developer cheat menu.
-- **Not yet:** a keyboard for naming saves (they're named after the level).
+- **Not yet:** an icon for Aurora (xsdk's `.xex` packer can't put one in yet).
 
 ## Layout
 
@@ -106,7 +117,8 @@ frame-rate counter shows it; high resolution off is about a quarter of the drawi
   palette (needs Python 3, Pillow and `rsvg-convert`).
 - `opl/` is Crispy Doom's OPL library, for the music: the chip (Nuked OPL3, `opl3.c`) and its timing.
 - `xenon/` is the Xbox 360's side: video through xsdk's GPU layer (`i_video.c`, `blit.vert`, `blit.frag`), the
-  controller and sound through SDL3 (`i_joystick.c`, `i_sound.c`), the timer, system and start (`i_timer.c`,
+  controller (vibration too) and sound through SDL3 (`i_joystick.c`, `i_sound.c`), the console's keyboard and
+  Guide through xsdk's XAM calls (`i_xam.c`, `i_joystick.c`), the timer, system and start (`i_timer.c`,
   `i_system.c`, `i_main.c`), headers that replace Crispy Doom's SDL2 ones, and stubs for what's left out
   (`stubs.c`: networking, the text-mode startup screen and the exit screen). `opl_xsdk.c` runs the music's OPL chip
   inside the sound mixer, in place of Crispy Doom's `opl_sdl.c`, which needs SDL2_mixer. `i_video.c` sizes the frame
@@ -135,8 +147,18 @@ All under the `HERETIC360` define, as in the Chocolate versions.
 - `src/heretic/doomdef.h`: declares the cheat menu, those two and the controls page.
 - `src/heretic/d_main.c`: the cheat menu takes events first and draws last; the PAUSED graphic hides under it.
 - `src/heretic/mn_menu.c`: the save and load screens' slot names are read at startup and when the page changes, not
-  each time a screen opens; INFO's first page is the controls page and the PC keyboard pages are skipped; the
-  controller's bumpers turn the save and Crispness pages, and the save screen says LB / RB, not PgUp / PgDn.
+  each time a screen opens, and only for the saves a listing of the folder found; each save's time is read with its
+  name; INFO's first page is the controls page and the PC keyboard pages are skipped; the controller's bumpers turn
+  the save and Crispness pages, and the save screen says LB / RB, not PgUp / PgDn; the mouse menu is the Controller
+  menu; Crispness page 3 has Jumping; the console's keyboard names saves (`xenon/i_xam.c`); `MN_JumpingOn`,
+  `MN_SystemUIOpened` for the controller code.
+- `src/heretic/g_game.c`, `src/heretic/p_user.c`: jumping, as Crispy Doom does it, carried as Hexen does, in the top
+  bit of the ticcmd's `arti` (`AFLAG_JUMP`), unless that's 0xff; `player_t` has `jumpTics` (`doomdef.h`), not saved.
+- `src/heretic/d_main.c`: keeps `crispy_jump` in the settings.
+- `src/heretic/am_map.c`: the map's controller buttons and scrolling.
+- `src/heretic/p_inter.c`, `src/heretic/p_pspr.c`: vibration when hurt, picking up and firing (`I_Rumble`).
+- `src/m_config.c`: `joystick_dead_zone`, `joystick_always_run` and `joystick_vibration`, kept in
+  `crispy-heretic.cfg`.
 - `src/heretic/info360.c` (new): the INFO controls page. Its controller picture, `info360_art.h`, is made by
   `tools/make_controls_art.py` from `art/360_controller.svg`.
 - `opl/opl.c`: SDL3's mutex and condition names; its only driver is `opl_xsdk_driver`.
@@ -146,6 +168,13 @@ Crispy draws a patch partly off the screen clipped, so 0.6's check for one (in `
 
 ## Changes
 
+- **0.8.1** (GitHub issue #1, and more): a Controller menu in place of the mouse's: turn and look speeds, dead zone,
+  invert Y, always run on or off, vibration; jumping (Crispness page 3), on A; clicking the left stick walks, or runs
+  with always run off; the map zooms on LB / RB, follows the player or not on the right stick's click, and scrolls on
+  the left stick; the controller vibrates when firing, hurt and picking things up; the console's keyboard names saves;
+  the Guide opening pauses the game; the save screen's pages change without looking for every empty slot on the hard
+  drive (one listing of the folder at startup), and it reads each save's time once, not every frame; INFO lists the
+  new controls; the `.xex` has a title ID of its own.
 - **0.8:** built on Crispy Doom 7.2 in place of Chocolate Doom 3.1.1: true widescreen, 640x400, an uncapped frame
   rate and the rest of Crispy's options (Options > Crispness), changeable as the game runs; LB / RB turn the save
   screen's and Crispness menu's pages; the developer menu's frame-rate counter is Crispy's, a number; the game's

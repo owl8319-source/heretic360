@@ -1464,6 +1464,26 @@ static default_t extra_defaults_list[] =
 
     CONFIG_VARIABLE_INT(joystick_look_sensitivity),
 
+#ifdef HERETIC360
+    //!
+    // Heretic 360: how far a stick must move, as a percentage of its travel, before it counts.
+    //
+
+    CONFIG_VARIABLE_INT(joystick_dead_zone),
+
+    //!
+    // Heretic 360: if non-zero, the game always runs; clicking the left stick walks.
+    //
+
+    CONFIG_VARIABLE_INT(joystick_always_run),
+
+    //!
+    // Heretic 360: if non-zero, the controller vibrates when firing, hurt and picking things up.
+    //
+
+    CONFIG_VARIABLE_INT(joystick_vibration),
+#endif
+
     //!
     // The physical joystick button that corresponds to joystick
     // virtual button #0.

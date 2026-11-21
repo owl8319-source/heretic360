@@ -24,6 +24,9 @@
 #include "p_local.h"
 #include "s_sound.h"
 #include "am_map.h"
+#ifdef HERETIC360
+#include "i_joystick.h"
+#endif
 
 
 #define BONUSADD 6
@@ -915,6 +918,13 @@ void P_TouchSpecialThing(mobj_t * special, mobj_t * toucher)
     if (player == &players[consoleplayer])
     {
         S_StartSound(NULL, sound);
+#ifdef HERETIC360
+        // Heretic 360: a light buzz for a pickup.
+        if (!demoplayback)
+        {
+            I_Rumble(20, 90);
+        }
+#endif
     }
 }
 
@@ -1479,6 +1489,15 @@ void P_DamageMobj
         {
             player->damagecount = 100;  // teleport stomp does 10k points...
         }
+#ifdef HERETIC360
+        // Heretic 360: the harder the hit, the harder and longer the controller shakes.
+        if (player == &players[consoleplayer] && !demoplayback)
+        {
+            const int hurt = damage < 100 ? damage : 100;
+
+            I_Rumble(35 + hurt, 150 + hurt * 3);
+        }
+#endif
         temp = damage < 100 ? damage : 100;
         if (player == &players[consoleplayer])
         {

@@ -928,6 +928,9 @@ void D_BindVariables(void)
     M_BindIntVariable("crispy_crosshairtype",   &crispy->crosshairtype);
     M_BindIntVariable("crispy_crosshaircolor",  &crispy->crosshaircolor);
     M_BindIntVariable("crispy_defaultskill",    &crispy->defaultskill);
+#ifdef HERETIC360
+    M_BindIntVariable("crispy_jump",            &crispy->jump); // Heretic 360: jumping
+#endif
     M_BindIntVariable("crispy_fpslimit",        &crispy->fpslimit);
     M_BindIntVariable("crispy_freelook",        &crispy->freelook_hh);
     M_BindIntVariable("crispy_gamma",           &crispy->gamma);

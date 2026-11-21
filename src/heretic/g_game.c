@@ -776,6 +776,14 @@ void G_BuildTiccmd(ticcmd_t *cmd, int maketic)
         cmd->arti = arti_egg;
     }
 
+#ifdef HERETIC360
+    // Heretic 360: Crispy Doom's jump, in Hexen's way (doomdef.h); off in demos and network games (critical).
+    if (critical->jump && joybjump >= 0 && joybuttons[joybjump] && cmd->arti != 0xff)
+    {
+        cmd->arti |= AFLAG_JUMP;
+    }
+#endif
+
 //
 // buttons
 //

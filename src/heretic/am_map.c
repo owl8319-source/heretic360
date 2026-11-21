@@ -27,6 +27,9 @@
 #include "p_local.h"
 #include "am_map.h"
 #include "am_data.h"
+#ifdef HERETIC360
+#include "i_joystick.h"
+#endif
 
 #include "doomkeys.h"
 #include "v_video.h"
@@ -904,6 +907,56 @@ boolean AM_Responder(event_t * ev)
             rc = true;
         }
     }
+#ifdef HERETIC360
+    // Heretic 360: the controller works the map (xenon/i_joystick.c): its bumpers zoom out and in while held, the right
+    // stick's click follows the player or lets the map scroll, and with the map not following, the left stick scrolls
+    // it, the player standing still meanwhile.
+    else if (ev->type == ev_joystick)
+    {
+        static boolean zooming = false;
+        static boolean follow_held = false;
+        const boolean follow_button = (ev->data1 & (1 << JOY_MAP_FOLLOW_BUTTON)) != 0;
+
+        rc = false;
+
+        if (ev->data1 & (1 << JOY_MAP_ZOOM_OUT_BUTTON))
+        {
+            mtof_zoommul = m_zoomout_kbd;
+            ftom_zoommul = m_zoomin_kbd;
+            zooming = true;
+        }
+        else if (ev->data1 & (1 << JOY_MAP_ZOOM_IN_BUTTON))
+        {
+            mtof_zoommul = m_zoomin_kbd;
+            ftom_zoommul = m_zoomout_kbd;
+            zooming = true;
+        }
+        else if (zooming)
+        {
+            mtof_zoommul = FRACUNIT;
+            ftom_zoommul = FRACUNIT;
+            zooming = false;
+        }
+
+        if (follow_button && !follow_held)
+        {
+            followplayer = !followplayer;
+            m_paninc.x = m_paninc.y = 0;
+            P_SetMessage(plr, followplayer ? AMSTR_FOLLOWON : AMSTR_FOLLOWOFF, true);
+        }
+        follow_held = follow_button;
+
+        if (!followplayer)
+        {
+            // data4 strafes (right positive), data3 moves (forward negative), each -FRACUNIT to FRACUNIT. The left
+            // stick scrolls the map instead of moving the player: the event goes on to the game without it, so the
+            // game still sees the buttons let go.
+            m_paninc.x = FTOM(FixedMul(f_paninc << crispy->hires, ev->data4));
+            m_paninc.y = -FTOM(FixedMul(f_paninc << crispy->hires, ev->data3));
+            ev->data3 = ev->data4 = 0;
+        }
+    }
+#endif
     else if (ev->type == ev_keydown)
     {
         rc = true;

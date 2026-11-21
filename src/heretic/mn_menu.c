@@ -39,6 +39,12 @@
 #include "v_trans.h" // [crispy] dp_translation
 
 #include "crispy.h"
+#ifdef HERETIC360
+#include <dirent.h>
+#include <strings.h>
+#include <sys/stat.h>
+#include "i_xam.h"
+#endif
 
 // Macros
 
@@ -120,6 +126,16 @@ static boolean SCMouseSensi(int option);
 static boolean SCMouseSensiX2(int option);
 static boolean SCMouseSensiY(int option);
 static boolean SCMouseInvertY(int option);
+#ifdef HERETIC360
+static boolean SCJoyTurn(int option);
+static boolean SCJoyLook(int option);
+static boolean SCJoyDeadZone(int option);
+static boolean SCJoyInvert(int option);
+static boolean SCJoyAlwaysRun(int option);
+static boolean SCJoyVibration(int option);
+static boolean CrispyJump(int option);
+static void DrawControllerMenu(void);
+#endif
 static boolean SCSfxVolume(int option);
 static boolean SCMusicVolume(int option);
 static boolean SCScreenSize(int option);
@@ -211,6 +227,18 @@ static boolean slottextloaded;
 #define RELOAD_SLOT_TEXT() (slottextloaded = false)
 #endif
 static boolean joypadsave;
+#ifdef HERETIC360
+// Heretic 360: which save files there are, all pages' slots, from one listing of the save folder at startup
+// (ListSaveFiles), so a page's empty slots aren't looked for one by one: on the console each file looked for and not
+// found waits on the hard drive. Kept up to date as games are saved and deleted.
+#define SAVE_SLOTS (SAVES_PER_PAGE * (SAVEPAGE_MAX + 1))
+static boolean slot_listed;
+static boolean slot_exists[SAVE_SLOTS];
+// The shown page's save times, read with the slot names, not looked up each frame.
+static time_t SlotTime[SAVES_PER_PAGE];
+// The slot whose name the console's keyboard is taking, or -1.
+static int keyboard_slot = -1;
+#endif
 static char SlotText[SAVES_PER_PAGE][SLOTTEXTLEN + 2];
 static char oldSlotText[SLOTTEXTLEN + 2];
 static int SlotStatus[SAVES_PER_PAGE];
@@ -325,7 +353,12 @@ static Menu_t SkillMenu = {
 static MenuItem_t OptionsItems[] = {
     {ITT_EFUNC, "END GAME", SCEndGame, 0, MENU_NONE},
     {ITT_LRFUNC2, "MESSAGES : ", SCMessages, 0, MENU_NONE},
+#ifdef HERETIC360
+    // Heretic 360: the mouse menu is the controller's.
+    {ITT_SETMENU, "CONTROLLER...", NULL, 0, MENU_MOUSE},
+#else
     {ITT_SETMENU, "MOUSE SENSITIVITY...", NULL, 0, MENU_MOUSE},
+#endif
     {ITT_SETMENU, "MORE...", NULL, 0, MENU_OPTIONS2},
     {ITT_SETMENU, "CRISPNESS...", NULL, 0, MENU_CRISPNESS1}
 };
@@ -338,6 +371,28 @@ static Menu_t OptionsMenu = {
     MENU_MAIN
 };
 
+#ifdef HERETIC360
+// Heretic 360: the controller's settings, in place of the mouse's (xenon/i_joystick.c).
+static MenuItem_t MouseItems[] = {
+    {ITT_LRFUNC, "TURN SPEED", SCJoyTurn, 0, MENU_NONE},
+    {ITT_EMPTY, NULL, NULL, 0, MENU_NONE},
+    {ITT_LRFUNC, "LOOK SPEED", SCJoyLook, 0, MENU_NONE},
+    {ITT_EMPTY, NULL, NULL, 0, MENU_NONE},
+    {ITT_LRFUNC, "DEAD ZONE", SCJoyDeadZone, 0, MENU_NONE},
+    {ITT_EMPTY, NULL, NULL, 0, MENU_NONE},
+    {ITT_LRFUNC2, "INVERT Y AXIS :", SCJoyInvert, 0, MENU_NONE},
+    {ITT_LRFUNC2, "ALWAYS RUN :", SCJoyAlwaysRun, 0, MENU_NONE},
+    {ITT_LRFUNC2, "VIBRATION :", SCJoyVibration, 0, MENU_NONE},
+};
+
+static Menu_t MouseMenu = {
+    90, 15,
+    DrawControllerMenu,
+    9, MouseItems,
+    0,
+    MENU_OPTIONS
+};
+#else
 static MenuItem_t MouseItems[] = {
     {ITT_LRFUNC, "HORIZONTAL : TURN", SCMouseSensi, 0, MENU_NONE},
     {ITT_EMPTY, NULL, NULL, 0, MENU_NONE},
@@ -355,6 +410,7 @@ static Menu_t MouseMenu = {
     0,
     MENU_OPTIONS
 };
+#endif
 
 static MenuItem_t Options2Items[] = {
     {ITT_LRFUNC, "SCREEN SIZE", SCScreenSize, 0, MENU_NONE},
@@ -433,7 +489,12 @@ static MenuItem_t Crispness3Items[] = {
     {ITT_LRFUNC2, "PLAYER VIEW/WEAPON BOBBING:", CrispyBobfactor, 0, MENU_NONE},
     {ITT_LRFUNC2, "WEAPON ATTACK ALIGNMENT:", CrispyCenterWeapon, 0, MENU_NONE},
     {ITT_LRFUNC2, "DEFAULT DIFFICULTY:", CrispyDefaultskill, 0, MENU_NONE},
+#ifdef HERETIC360
+    // Heretic 360: jumping, as Crispy Doom has it.
+    {ITT_LRFUNC2, "JUMPING:", CrispyJump, 0, MENU_NONE},
+#else
     {ITT_EMPTY, NULL, NULL, 0, MENU_NONE},
+#endif
     {ITT_EMPTY, NULL, NULL, 0, MENU_NONE},
     {ITT_LRFUNC2, "DRAW CROSSHAIR:", CrispyCrosshair, 0, MENU_NONE},
     {ITT_LRFUNC2, "CROSSHAIR SHAPE:", CrispyCrosshairShape, 0, MENU_NONE},
@@ -524,6 +585,17 @@ static const multiitem_t multiitem_difficulties[NUM_SKILLS] =
     {SKILL_ITYTD, "WET-NURSE"},
     {SKILL_HNTR, "YELLOWBELLIES"},
 };
+
+#ifdef HERETIC360
+// Heretic 360: Crispy Doom's jumping: off, a low jump or a high one.
+#define NUM_JUMPS 3
+static const multiitem_t multiitem_jump[NUM_JUMPS] =
+{
+    {0, "OFF"},
+    {1, "LOW"},
+    {2, "HIGH"},
+};
+#endif
 
 multiitem_t multiitem_he_crosshair[NUM_HE_CROSSHAIRS] =
 {
@@ -865,6 +937,47 @@ void MN_Ticker(void)
         return;
     }
     MenuTime++;
+
+#ifdef HERETIC360
+    // Heretic 360: the console's keyboard, naming a save (SCSaveGame).
+    if (keyboard_slot >= 0)
+    {
+        char typed[SLOTTEXTLEN + 1];
+        const int slot = keyboard_slot;
+        const int result = I_PollSaveNameKeyboard(typed, sizeof(typed));
+
+        if (result == 0)
+        {
+            return;
+        }
+
+        keyboard_slot = -1;
+
+        if (result > 0 && FileMenuKeySteal && currentSlot == slot)
+        {
+            // An empty name keeps the one shown.
+            if (typed[0] != '\0')
+            {
+                M_StringCopy(SlotText[slot], typed, sizeof(SlotText[slot]));
+            }
+            else
+            {
+                SlotText[slot][slotptr] = 0;
+            }
+            CurrentMenu->oldItPos = CurrentItPos;
+            SCSaveGame(slot);
+        }
+        else if (FileMenuKeySteal && currentSlot == slot)
+        {
+            // Cancelled: as Escape does while a name is typed.
+            memset(SlotText[slot], 0, SLOTTEXTLEN + 2);
+            M_StringCopy(SlotText[slot], oldSlotText, sizeof(SlotText[slot]));
+            SlotStatus[slot]--;
+            FileMenuKeySteal = false;
+            I_StopTextInput();
+        }
+    }
+#endif
 }
 
 //---------------------------------------------------------------------------
@@ -1069,10 +1182,18 @@ static void DrawSaveLoadBottomLine(const Menu_t *menu)
     // [crispy] print "modified" (or created initially) time of savegame file
     if (SlotStatus[CurrentItPos] && !FileMenuKeySteal)
     {
-        struct stat st;
         char filedate[32];
+#ifdef HERETIC360
+        // Heretic 360: the time read with the slot's name (MN_LoadSlotText), not looked up each frame.
+        struct stat st;
+
+        st.st_mtime = SlotTime[CurrentItPos];
+        if (st.st_mtime != 0)
+#else
+        struct stat st;
 
         if (M_stat(SV_Filename(CurrentItPos), &st) == 0)
+#endif
         {
 // [FG] suppress the most useless compiler warning ever
 #if defined(__GNUC__)
@@ -1141,17 +1262,88 @@ static void DrawSaveMenu(void)
 //              Loads in the text message for each slot
 //===========================================================================
 
+#ifdef HERETIC360
+// Lists the save folder once: hticsav<n>.hsg, any case.
+static void ListSaveFiles(void)
+{
+    DIR *dir = opendir(savegamedir[0] != '\0' ? savegamedir : ".");
+    struct dirent *entry;
+
+    if (dir == NULL)
+    {
+        printf("heretic360: can't list the save folder; looking for each save\n");
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL)
+    {
+        const char *name = entry->d_name;
+        const size_t prefix = strlen(SAVEGAMENAME);
+        char *end;
+        long slot;
+
+        if (strncasecmp(name, SAVEGAMENAME, prefix) != 0)
+        {
+            continue;
+        }
+
+        slot = strtol(name + prefix, &end, 10);
+        if (end != name + prefix && !strcasecmp(end, ".hsg") && slot >= 0 && slot < SAVE_SLOTS)
+        {
+            slot_exists[slot] = true;
+        }
+    }
+
+    closedir(dir);
+    slot_listed = true;
+}
+
+static void SetSlotExists(int slot, boolean exists)
+{
+    const int index = SAVES_PER_PAGE * savepage + slot;
+
+    if (index >= 0 && index < SAVE_SLOTS)
+    {
+        slot_exists[index] = exists;
+    }
+}
+#endif
+
 void MN_LoadSlotText(void)
 {
     FILE *fp;
     int i;
     char *filename;
 
+#ifdef HERETIC360
+    if (!slot_listed)
+    {
+        ListSaveFiles();
+    }
+#endif
+
     for (i = 0; i < SAVES_PER_PAGE; i++)
     {
         int retval;
+#ifdef HERETIC360
+        struct stat st;
+
+        SlotTime[i] = 0;
+        if (slot_listed && !slot_exists[SAVES_PER_PAGE * savepage + i])
+        {
+            SlotText[i][0] = 0;
+            SlotStatus[i] = 0;
+            continue;
+        }
+#endif
         filename = SV_Filename(i);
         fp = M_fopen(filename, "rb+");
+#ifdef HERETIC360
+        if (fp && M_stat(filename, &st) == 0)
+        {
+            SlotTime[i] = st.st_mtime;
+        }
+#endif
 	free(filename);
 
         if (!fp)
@@ -1355,6 +1547,9 @@ static boolean SCDeleteGame(int option)
     filename = SV_Filename(option);
     remove(filename);
     free(filename);
+#ifdef HERETIC360
+    SetSlotExists(option, false);
+#endif
 
     CurrentMenu->oldItPos = CurrentItPos;
     MN_LoadSlotText();
@@ -1442,6 +1637,14 @@ static boolean SCSaveGame(int option)
             SetDefaultSaveName(option);
         }
 
+#ifdef HERETIC360
+        // Heretic 360: the console's keyboard names the save, the slot's name in it to start with; MN_Ticker takes
+        // what was typed. Without it, A saves under the name shown, as on a PC.
+        if (I_StartSaveNameKeyboard(SlotText[option], SLOTTEXTLEN))
+        {
+            keyboard_slot = option;
+        }
+#endif
         while (*ptr)
         {
             ptr++;
@@ -1455,6 +1658,10 @@ static boolean SCSaveGame(int option)
     }
     else
     {
+#ifdef HERETIC360
+        SetSlotExists(option, true);
+        SlotTime[option] = time(NULL);
+#endif
         G_SaveGame(option, SlotText[option]);
         FileMenuKeySteal = false;
         I_StopTextInput();
@@ -1566,6 +1773,119 @@ static boolean SCMouseInvertY(int option)
     mouse_y_invert = !mouse_y_invert;
     return true;
 }
+
+#ifdef HERETIC360
+// What DrawSlider shows beside the next slider it draws, if set.
+static char slider_shown[8];
+
+// Heretic 360: the Controller menu. The speeds are Crispy's joystick sensitivities, 1 to 16 (10 as Crispy starts); the
+// dead zone a percentage of a stick's travel, 5 to 35 in steps of 2.
+
+#define JOY_SPEED_MIN 1
+#define JOY_SPEED_MAX 16
+#define DEAD_ZONE_MIN 5
+#define DEAD_ZONE_STEP 2
+#define DEAD_ZONE_MAX (DEAD_ZONE_MIN + 15 * DEAD_ZONE_STEP)
+
+static void ChangeSpeed(int *value, int option)
+{
+    if (option == RIGHT_DIR && *value < JOY_SPEED_MAX)
+    {
+        (*value)++;
+    }
+    else if (option != RIGHT_DIR && *value > JOY_SPEED_MIN)
+    {
+        (*value)--;
+    }
+}
+
+static boolean SCJoyTurn(int option)
+{
+    ChangeSpeed(&joystick_turn_sensitivity, option);
+    return true;
+}
+
+static boolean SCJoyLook(int option)
+{
+    ChangeSpeed(&joystick_look_sensitivity, option);
+    return true;
+}
+
+static boolean SCJoyDeadZone(int option)
+{
+    if (option == RIGHT_DIR && joystick_dead_zone + DEAD_ZONE_STEP <= DEAD_ZONE_MAX)
+    {
+        joystick_dead_zone += DEAD_ZONE_STEP;
+    }
+    else if (option != RIGHT_DIR && joystick_dead_zone - DEAD_ZONE_STEP >= DEAD_ZONE_MIN)
+    {
+        joystick_dead_zone -= DEAD_ZONE_STEP;
+    }
+    return true;
+}
+
+static boolean SCJoyInvert(int option)
+{
+    joystick_look_invert = !joystick_look_invert;
+    return true;
+}
+
+static boolean SCJoyAlwaysRun(int option)
+{
+    joystick_always_run = !joystick_always_run;
+    return true;
+}
+
+static boolean SCJoyVibration(int option)
+{
+    joystick_vibration = !joystick_vibration;
+    if (joystick_vibration)
+    {
+        I_Rumble(40, 200);
+    }
+    return true;
+}
+
+static int Clamp(int value, int low, int high)
+{
+    return value < low ? low : value > high ? high : value;
+}
+
+static void DrawControllerMenu(void)
+{
+    const int dead_zone = Clamp(joystick_dead_zone, DEAD_ZONE_MIN, DEAD_ZONE_MAX);
+
+    const int turn = Clamp(joystick_turn_sensitivity, JOY_SPEED_MIN, JOY_SPEED_MAX);
+    const int look = Clamp(joystick_look_sensitivity, JOY_SPEED_MIN, JOY_SPEED_MAX);
+
+    M_snprintf(slider_shown, sizeof(slider_shown), "%d", turn);
+    DrawSlider(&MouseMenu, 1, 16, turn - JOY_SPEED_MIN);
+    M_snprintf(slider_shown, sizeof(slider_shown), "%d", look);
+    DrawSlider(&MouseMenu, 3, 16, look - JOY_SPEED_MIN);
+    M_snprintf(slider_shown, sizeof(slider_shown), "%d%%", dead_zone);
+    DrawSlider(&MouseMenu, 5, 16, (dead_zone - DEAD_ZONE_MIN) / DEAD_ZONE_STEP);
+
+    MN_DrTextB(joystick_look_invert ? "ON" : "OFF", 226, 135);
+    MN_DrTextB(joystick_always_run ? "ON" : "OFF", 226, 155);
+    MN_DrTextB(joystick_vibration ? "ON" : "OFF", 226, 175);
+}
+
+// Whether jumping is on as the game may use it: Crispy's setting, off in demos and network games (crispy.c).
+int MN_JumpingOn(void)
+{
+    return critical->jump != 0;
+}
+
+// The Guide, or one of the console's dialogs, has opened (xenon/i_joystick.c): over a level, the menu opens, which
+// pauses the game until the player closes it.
+void MN_SystemUIOpened(void)
+{
+    if (gamestate == GS_LEVEL && !MenuActive && !DM_Active && !paused && !netgame && !demoplayback)
+    {
+        MN_ActivateMenu();
+    }
+}
+#endif
 
 //---------------------------------------------------------------------------
 //
@@ -1908,6 +2228,14 @@ static boolean CrispyDefaultskill(int option)
     return true;
 }
 
+#ifdef HERETIC360
+static boolean CrispyJump(int option)
+{
+    ChangeSettingEnum(&crispy->jump, option, NUM_JUMPS);
+    return true;
+}
+#endif
+
 static boolean CrispyCrosshair(int option)
 {
     ChangeSettingEnum(&crispy->crosshair, option, NUM_HE_CROSSHAIRS);
@@ -1972,6 +2300,14 @@ boolean MN_Responder(event_t * event)
     MenuItem_t *item;
     char *textBuffer;
     int dir;
+
+#ifdef HERETIC360
+    // Heretic 360: the console's keyboard has the controller while it names a save (MN_Ticker).
+    if (keyboard_slot >= 0)
+    {
+        return true;
+    }
+#endif
 
     // In testcontrols mode, none of the function keys should do anything
     // - the only key is escape to quit.
@@ -3034,8 +3370,19 @@ static void DrawSlider(Menu_t * menu, int item, int width, int slot)
     V_DrawPatch(x2, y, W_CacheLumpName(DEH_String("M_SLDRT"), PU_CACHE));
 
     // [crispy] print the value
+#ifdef HERETIC360
+    // Heretic 360: the Controller menu shows its settings' own values (slider_shown), not the slider's position.
+    if (slider_shown[0] != '\0')
+    {
+        MN_DrTextA(slider_shown, x2 + 32, y + 3);
+        slider_shown[0] = '\0';
+    }
+    else
+#endif
+    {
     M_snprintf(num, 4, "%3d", slot);
     MN_DrTextA(num, x2 + 32, y + 3);
+    }
 
     // [crispy] do not crash anymore if the value is out of bounds
     if (slot >= width)
@@ -3246,6 +3593,11 @@ static void DrawCrispness3(void)
 
     // Default difficulty
     DrawCrispnessMultiItem(crispy->defaultskill, 200, 75, multiitem_difficulties, false);
+
+#ifdef HERETIC360
+    // Jumping
+    DrawCrispnessMultiItem(crispy->jump, 68 + MN_TextAWidth("JUMPING:") + 8, 85, multiitem_jump, false);
+#endif
 
     DrawCrispnessSubheader("CROSSHAIR", 95);
 

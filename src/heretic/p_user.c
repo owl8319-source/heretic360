@@ -19,6 +19,9 @@
 #include <stdlib.h>
 
 #include "doomdef.h"
+#ifdef HERETIC360
+#include "crispy.h"
+#endif
 #include "deh_str.h"
 #include "m_random.h"
 #include "p_local.h"
@@ -216,8 +219,17 @@ void P_MovePlayer(player_t * player)
     {                           // Normal speed
         if (cmd->forwardmove && (onground || player->mo->flags2 & MF2_FLY))
             P_Thrust(player, player->mo->angle, cmd->forwardmove * 2048);
+#ifdef HERETIC360
+        // [crispy] in-air movement is only possible with jumping enabled
+        else if (cmd->forwardmove && critical->jump)
+            P_Thrust(player, player->mo->angle, FRACUNIT >> 8);
+#endif
         if (cmd->sidemove && (onground || player->mo->flags2 & MF2_FLY))
             P_Thrust(player, player->mo->angle - ANG90, cmd->sidemove * 2048);
+#ifdef HERETIC360
+        else if (cmd->sidemove && critical->jump)
+            P_Thrust(player, player->mo->angle - ANG90, FRACUNIT >> 8);
+#endif
     }
 
     if (cmd->forwardmove || cmd->sidemove)
@@ -638,6 +650,24 @@ void P_PlayerThink(player_t * player)
     {
         P_PlayerInSpecialSector(player);
     }
+#ifdef HERETIC360
+    // Heretic 360: jumping, as Crispy Doom does it: up off the floor, not flying, with room above the head, and not
+    // again for half a second.
+    if (player->jumpTics)
+    {
+        player->jumpTics--;
+    }
+    if (cmd->arti != 0xff && (cmd->arti & AFLAG_JUMP))
+    {
+        if (critical->jump && onground && !player->jumpTics && !(player->mo->flags2 & MF2_FLY)
+            && player->viewz < player->mo->ceilingz - 16 * FRACUNIT)
+        {
+            player->mo->momz = (7 + critical->jump) * FRACUNIT;
+            player->jumpTics = 18;
+        }
+        cmd->arti &= ~AFLAG_JUMP;
+    }
+#endif
     if (cmd->arti)
     {                           // Use an artifact
         if (cmd->arti == 0xff)

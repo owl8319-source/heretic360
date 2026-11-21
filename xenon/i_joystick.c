@@ -5,17 +5,23 @@
 //   Left stick    move and strafe        Left stick, D-pad  choose
 //   Right stick   turn and look          A                  select (yes, on the quit question)
 //   RT            fire                   B                  back (no, on the quit question)
-//   LT or A       use (doors, switches)  Start              open the menu
+//   LT            use (doors, switches)  Start              open the menu
+//   A             use, or jump with Crispness' jumping on
 //   LB / RB       previous / next weapon LB / RB            previous / next page
-//   D-pad left / right  inventory        The game always runs; push the stick part way to walk.
-//   D-pad up or X  use the artifact
-//   Y / B         fly up / down (Wings of Wrath)
+//   D-pad left / right  inventory
+//   D-pad up or X  use the artifact      On the map
+//   Y / B         fly up / down          LB / RB            zoom out / in
+//   Left stick click  walk (run, with    Right stick click  follow the player or not
+//                 always run off)        Left stick         scroll, when not following
 //   Right stick click  centre the view and stop flying
 //   Back          map
 //   Start         menu
 //
-// LB + RB + Back, held about a second in a level, opens the developer cheat menu (src/heretic/devmenu.c), so Back opens
-// no map while both bumpers are held. In that menu A selects and B closes, as in Heretic's.
+// The Controller menu (heretic/mn_menu.c) sets the turn and look speeds, the dead zone, inverting the look, always run
+// and vibration. LB + RB + Back, held about a second in a level, opens the developer cheat menu
+// (src/heretic/devmenu.c), so Back opens no map while both bumpers are held. In that menu A selects and B closes, as in
+// Heretic's. When the Guide or one of the console's dialogs opens, the game opens its menu, which pauses it, and the
+// controller reads as let go until the dialog closes.
 
 #include <stdio.h>
 
@@ -29,11 +35,19 @@
 #include "m_controls.h"
 #include "m_fixed.h"
 
+#include "xsdk/xam.h"
+
 // Heretic's menu state (heretic/mn_menu.c) and the developer cheat menu's (heretic/devmenu.c): A and B mean select
 // and back there, use and fly down in the game.
 extern boolean MenuActive;
 extern boolean askforquit;
 extern boolean DM_Active;
+// Whether the map is up (heretic/am_map.c): the bumpers and the right stick's click work it.
+extern boolean automapactive;
+// Whether jumping is on (Crispness), as the game may use it: off in demos and network games (crispy.c's critical).
+extern int MN_JumpingOn(void);
+// Opens Heretic's menu, pausing the game, when the Guide opens over a level (heretic/mn_menu.c).
+extern void MN_SystemUIOpened(void);
 
 // The virtual buttons the joyb* variables name.
 enum
@@ -50,13 +64,19 @@ enum
     VB_FLY_CENTER,
     VB_MENU,
     VB_AUTOMAP,
+    // 12 is JOY_DEV_COMBO_BUTTON.
+    VB_SPEED = 13,
+    VB_JUMP,
+    VB_MAP_ZOOM_OUT = JOY_MAP_ZOOM_OUT_BUTTON,
+    VB_MAP_ZOOM_IN = JOY_MAP_ZOOM_IN_BUTTON,
+    VB_MAP_FOLLOW = JOY_MAP_FOLLOW_BUTTON,
 };
 
 // Heretic's g_game.c treats a speed button past its 20 buttons as always held: always run.
 #define ALWAYS_RUN_BUTTON 29
 
-// A stick within this share of its travel of the middle reads as the middle.
-#define STICK_DEAD_ZONE (25 * 32768 / 100)
+// No speed button: the run button reads as never held (g_game.c's speedkeydown), so the game walks.
+#define NO_SPEED_BUTTON -1
 // Menus move once the stick is past half its travel.
 #define DIRECTION_DEAD_ZONE (50 * 32768 / 100)
 
@@ -67,16 +87,34 @@ int use_analog = 1;
 int joystick_turn_sensitivity = 10;
 int joystick_move_sensitivity = 10;
 int joystick_look_sensitivity = 10;
+int joystick_look_invert = 0;
+// Percent of a stick's travel.
+int joystick_dead_zone = 25;
+int joystick_always_run = 1;
+int joystick_vibration = 1;
+
+// With always run on, the speed button walks while it's held: Heretic runs with its speed button past the 20 it
+// knows, and walks with none (g_game.c). With always run off, the speed button is an ordinary button that runs.
+static void SetSpeedButton(boolean held)
+{
+    if (joystick_always_run)
+    {
+        joybspeed = held ? NO_SPEED_BUTTON : ALWAYS_RUN_BUTTON;
+    }
+    else
+    {
+        joybspeed = VB_SPEED;
+    }
+}
 
 static void SetButtonLayout(void)
 {
     joybfire = VB_FIRE;
     joybuse = VB_USE;
     joybstrafe = -1;
-    joybspeed = ALWAYS_RUN_BUTTON;
     joybstrafeleft = -1;
     joybstraferight = -1;
-    joybjump = -1;
+    joybjump = VB_JUMP;
     joybprevweapon = VB_PREV_WEAPON;
     joybnextweapon = VB_NEXT_WEAPON;
     joybmenu = VB_MENU;
@@ -160,8 +198,9 @@ static boolean TriggerPressed(SDL_GamepadAxis trigger)
 static int Axis(SDL_GamepadAxis axis)
 {
     int value = SDL_GetGamepadAxis(gamepad, axis);
+    const int dead_zone = joystick_dead_zone * 32768 / 100;
 
-    if (value < STICK_DEAD_ZONE && value > -STICK_DEAD_ZONE)
+    if (value < dead_zone && value > -dead_zone)
     {
         return 0;
     }
@@ -221,21 +260,38 @@ static int ButtonState(void)
     }
 
     if (TriggerPressed(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)) SET(VB_FIRE);
-    if (TriggerPressed(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) || Pressed(SDL_GAMEPAD_BUTTON_SOUTH)) SET(VB_USE);
-    if (Pressed(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)) SET(VB_PREV_WEAPON);
-    if (Pressed(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) SET(VB_NEXT_WEAPON);
+    if (TriggerPressed(SDL_GAMEPAD_AXIS_LEFT_TRIGGER)) SET(VB_USE);
+    // A jumps with Crispness' jumping on, and is a second use button otherwise.
+    if (Pressed(SDL_GAMEPAD_BUTTON_SOUTH)) SET(MN_JumpingOn() ? VB_JUMP : VB_USE);
+    if (Pressed(SDL_GAMEPAD_BUTTON_LEFT_STICK)) SET(VB_SPEED);
+    SetSpeedButton(Pressed(SDL_GAMEPAD_BUTTON_LEFT_STICK));
+    if (automapactive)
+    {
+        // On the map the bumpers zoom and the right stick's click follows the player or lets the map scroll
+        // (heretic/am_map.c), in place of changing weapons and centring the view.
+        if (Pressed(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) && !bumpers) SET(VB_MAP_ZOOM_OUT);
+        if (Pressed(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) && !bumpers) SET(VB_MAP_ZOOM_IN);
+        if (Pressed(SDL_GAMEPAD_BUTTON_RIGHT_STICK)) SET(VB_MAP_FOLLOW);
+    }
+    else
+    {
+        if (Pressed(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)) SET(VB_PREV_WEAPON);
+        if (Pressed(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) SET(VB_NEXT_WEAPON);
+        if (Pressed(SDL_GAMEPAD_BUTTON_RIGHT_STICK)) SET(VB_FLY_CENTER);
+    }
     if (Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) SET(VB_INV_LEFT);
     if (Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) SET(VB_INV_RIGHT);
     if (Pressed(SDL_GAMEPAD_BUTTON_DPAD_UP) || Pressed(SDL_GAMEPAD_BUTTON_WEST)) SET(VB_USE_ARTIFACT);
     if (Pressed(SDL_GAMEPAD_BUTTON_NORTH)) SET(VB_FLY_UP);
     if (Pressed(SDL_GAMEPAD_BUTTON_EAST)) SET(VB_FLY_DOWN);
-    if (Pressed(SDL_GAMEPAD_BUTTON_RIGHT_STICK)) SET(VB_FLY_CENTER);
     if (Pressed(SDL_GAMEPAD_BUTTON_BACK) && !bumpers) SET(VB_AUTOMAP);
 
 #undef SET
 
     return buttons;
 }
+
+static boolean SystemUIOpen(void);
 
 void I_UpdateJoystick(void)
 {
@@ -249,6 +305,9 @@ void I_UpdateJoystick(void)
     // Reads the controllers. Nothing else reads SDL's events, so they're dropped rather than left to pile up.
     SDL_PumpEvents();
     SDL_FlushEvents(SDL_EVENT_FIRST, SDL_EVENT_LAST);
+
+    // Asked once a frame, controller or not (xsdk's docs/GUIDE.md).
+    const boolean ui_open = SystemUIOpen();
 
     if (gamepad != NULL && !SDL_GamepadConnected(gamepad))
     {
@@ -269,14 +328,64 @@ void I_UpdateJoystick(void)
     SetButtonLayout();
 
     ev.type = ev_joystick;
+
+    // While the Guide or a dialog of the console's is up, the game's menu is open and the controller reads as let go.
+    if (ui_open)
+    {
+        ev.data1 = ev.data2 = ev.data3 = ev.data4 = ev.data5 = ev.data6 = 0;
+        SetSpeedButton(false);
+        D_PostEvent(&ev);
+        return;
+    }
+
     ev.data1 = ButtonState();
     ev.data2 = Axis(SDL_GAMEPAD_AXIS_RIGHTX);    // turn
     ev.data3 = Axis(SDL_GAMEPAD_AXIS_LEFTY);     // forward and back
     ev.data4 = Axis(SDL_GAMEPAD_AXIS_LEFTX);     // strafe
     ev.data5 = Axis(SDL_GAMEPAD_AXIS_RIGHTY);    // look
+    if (joystick_look_invert)
+    {
+        ev.data5 = -ev.data5;
+    }
     ev.data6 = DirectionalInput();
 
     D_PostEvent(&ev);
+}
+
+// Whether the Guide or one of the console's dialogs is up (xsdk_system_ui_open, asked once a frame); as it opens, the
+// game's menu opens and the controller stops shaking.
+static boolean SystemUIOpen(void)
+{
+    static boolean was_open = false;
+    const boolean open = xsdk_system_ui_open();
+
+    if (open && !was_open)
+    {
+        if (gamepad != NULL)
+        {
+            SDL_RumbleGamepad(gamepad, 0, 0, 0);
+        }
+        MN_SystemUIOpened();
+    }
+
+    was_open = open;
+    return open;
+}
+
+void I_Rumble(int strength, int ms)
+{
+    if (!joystick_vibration || gamepad == NULL || strength <= 0)
+    {
+        return;
+    }
+
+    if (strength > 100)
+    {
+        strength = 100;
+    }
+
+    // The left motor is the heavy one, the right the light one.
+    SDL_RumbleGamepad(gamepad, (Uint16) (strength * 65535 / 100), (Uint16) (strength * 65535 / 160), (Uint32) ms);
 }
 
 void I_BindJoystickVariables(void)
@@ -285,4 +394,8 @@ void I_BindJoystickVariables(void)
     M_BindIntVariable("joystick_turn_sensitivity",  &joystick_turn_sensitivity);
     M_BindIntVariable("joystick_move_sensitivity",  &joystick_move_sensitivity);
     M_BindIntVariable("joystick_look_sensitivity",  &joystick_look_sensitivity);
+    M_BindIntVariable("joystick_look_invert",       &joystick_look_invert);
+    M_BindIntVariable("joystick_dead_zone",         &joystick_dead_zone);
+    M_BindIntVariable("joystick_always_run",        &joystick_always_run);
+    M_BindIntVariable("joystick_vibration",         &joystick_vibration);
 }

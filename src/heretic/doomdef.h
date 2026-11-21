@@ -493,6 +493,11 @@ typedef struct player_s
 
     // [crispy] variable player view bob
     fixed_t bob2;
+
+#ifdef HERETIC360
+    // Heretic 360: the tics until the player may jump again (p_user.c). Not saved.
+    unsigned int jumpTics;
+#endif
 } player_t;
 
 #define CF_NOCLIP		1
@@ -920,6 +925,14 @@ boolean DM_Responder(event_t *event);
 void DM_Drawer(void);
 void SB_DevCheat(player_t *player, devcheat_t which);
 boolean SB_DevTickerOn(void);
+
+// Heretic 360: jumping, as Crispy Doom and Hexen have it: a ticcmd's arti with this bit, unless it's 0xff (the next
+// artifact), jumps (g_game.c, p_user.c).
+#define AFLAG_JUMP 0x80
+
+// Heretic 360: the menu's side of the controller (mn_menu.c, called by xenon/i_joystick.c).
+int MN_JumpingOn(void);
+void MN_SystemUIOpened(void);
 
 // Heretic 360: the INFO menu's controls page (info360.c).
 void MN_DrawControls360(void);

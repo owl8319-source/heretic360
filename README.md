@@ -9,6 +9,11 @@ Versions up to 0.7 were built on Chocolate Doom 3.1.1, closer to the original; t
 
 You need your own `heretic.wad` (v1.3, Shadow of the Serpent Riders). It isn't included.
 
+## Download
+
+Each release on the [Releases page](https://github.com/owl8319-source/heretic360/releases) has a ready-built
+`heretic.xex` and `NOTICES.md`. To build it yourself instead, see below.
+
 ## Building (WSL Debian)
 
 With xsdk built at `~/xsdk` and SDL-xenon built at `~/SDL-xenon/build-xsdk`, from this folder:
@@ -161,5 +166,6 @@ Crispy draws a patch partly off the screen clipped, so 0.6's check for one (in `
 
 ## Licence
 
-GPL 2 or later, as Crispy Doom and Chocolate Doom (`COPYING.md`). Heretic's WAD is id Software and Raven Software's, not covered. The controller picture
+GPL 2 or later, as Crispy Doom and Chocolate Doom (`COPYING.md`). `NOTICES.md` has every notice a built `heretic.xex` carries (xsdk, SDL, the
+controller picture); it goes beside the `.xex` in a release. Heretic's WAD is id Software and Raven Software's, not covered. The controller picture
 (`art/360_controller.svg` and `src/heretic/info360_art.h`) is CC BY-SA 3.0, after Alphathon; see `art/README.md`.

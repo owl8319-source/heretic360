@@ -17,13 +17,17 @@
 //   Back          map
 //   Start         menu
 //
-// The Controller menu (heretic/mn_menu.c) sets the turn and look speeds, the dead zone, inverting the look, always run
+// That's the layout as the game starts. Options > Button Layout (heretic/mn_menu.c), or joystick_button_<name> in
+// crispy-heretic.cfg, gives each button but Start another action; the menus' buttons, the map's and the developer
+// menu's combination stay as they are. The Controller menu sets the turn and look speeds, the dead zone, inverting the look, always run
 // and vibration. LB + RB + Back, held about a second in a level, opens the developer cheat menu
 // (src/heretic/devmenu.c), so Back opens no map while both bumpers are held. In that menu A selects and B closes, as in
 // Heretic's. When the Guide or one of the console's dialogs opens, the game opens its menu, which pauses it, and the
 // controller reads as let go until the dialog closes.
 
 #include <stdio.h>
+#include <string.h>
+#include <strings.h>
 
 #include <SDL3/SDL.h>
 
@@ -34,6 +38,7 @@
 #include "m_config.h"
 #include "m_controls.h"
 #include "m_fixed.h"
+#include "m_misc.h"
 
 #include "xsdk/xam.h"
 
@@ -92,6 +97,142 @@ int joystick_look_invert = 0;
 int joystick_dead_zone = 25;
 int joystick_always_run = 1;
 int joystick_vibration = 1;
+
+// What each button does: an action's name in the settings (joystick_button_<name>), read into button_action as the
+// game starts and whenever the setting changes.
+
+enum
+{
+    ACTION_NONE,
+    ACTION_FIRE,
+    ACTION_USE,
+    ACTION_USE_JUMP,
+    ACTION_JUMP,
+    ACTION_SPEED,
+    ACTION_PREV_WEAPON,
+    ACTION_NEXT_WEAPON,
+    ACTION_INV_LEFT,
+    ACTION_INV_RIGHT,
+    ACTION_USE_ITEM,
+    ACTION_FLY_UP,
+    ACTION_FLY_DOWN,
+    ACTION_CENTER,
+    ACTION_MAP,
+    ACTION_MENU,
+};
+
+typedef struct
+{
+    const char *setting;  // joystick_button_<setting>
+    const char *label;    // in the Button Layout menu
+    int sdl_button;       // or -1 for a trigger
+    int sdl_trigger;
+    int default_action;
+} mapped_button_t;
+
+static const mapped_button_t mapped_buttons[NUM_MAPPED_BUTTONS] = {
+    {"a",          "A",                  SDL_GAMEPAD_BUTTON_SOUTH,          -1, ACTION_USE_JUMP},
+    {"b",          "B",                  SDL_GAMEPAD_BUTTON_EAST,           -1, ACTION_FLY_DOWN},
+    {"x",          "X",                  SDL_GAMEPAD_BUTTON_WEST,           -1, ACTION_USE_ITEM},
+    {"y",          "Y",                  SDL_GAMEPAD_BUTTON_NORTH,          -1, ACTION_FLY_UP},
+    {"lb",         "LB",                 SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,  -1, ACTION_PREV_WEAPON},
+    {"rb",         "RB",                 SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, -1, ACTION_NEXT_WEAPON},
+    {"lt",         "LT",                 -1, SDL_GAMEPAD_AXIS_LEFT_TRIGGER,     ACTION_USE},
+    {"rt",         "RT",                 -1, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER,    ACTION_FIRE},
+    {"back",       "BACK",               SDL_GAMEPAD_BUTTON_BACK,           -1, ACTION_MAP},
+    {"lstick",     "LEFT STICK CLICK",   SDL_GAMEPAD_BUTTON_LEFT_STICK,     -1, ACTION_SPEED},
+    {"rstick",     "RIGHT STICK CLICK",  SDL_GAMEPAD_BUTTON_RIGHT_STICK,    -1, ACTION_CENTER},
+    {"dpad_up",    "D-PAD UP",           SDL_GAMEPAD_BUTTON_DPAD_UP,        -1, ACTION_USE_ITEM},
+    {"dpad_down",  "D-PAD DOWN",         SDL_GAMEPAD_BUTTON_DPAD_DOWN,      -1, ACTION_NONE},
+    {"dpad_left",  "D-PAD LEFT",         SDL_GAMEPAD_BUTTON_DPAD_LEFT,      -1, ACTION_INV_LEFT},
+    {"dpad_right", "D-PAD RIGHT",        SDL_GAMEPAD_BUTTON_DPAD_RIGHT,     -1, ACTION_INV_RIGHT},
+};
+
+// The actions' names in the settings and labels in the menu, in the ACTION_ order.
+static const char *const action_settings[NUM_BUTTON_ACTIONS] = {
+    "none", "fire", "use", "usejump", "jump", "speed", "prevweapon", "nextweapon",
+    "invleft", "invright", "useitem", "flyup", "flydown", "center", "map", "menu",
+};
+
+static const char *const action_labels[NUM_BUTTON_ACTIONS] = {
+    "NOTHING", "FIRE", "USE", "USE / JUMP", "JUMP", "WALK / RUN", "PREV WEAPON", "NEXT WEAPON",
+    "INVENTORY LEFT", "INVENTORY RIGHT", "USE ITEM", "FLY UP", "FLY DOWN", "CENTER VIEW", "MAP", "MENU",
+};
+
+// The settings as m_config.c keeps them, and the setting each button's action was last read from.
+static char *button_settings[NUM_MAPPED_BUTTONS];
+static const char *button_read_from[NUM_MAPPED_BUTTONS];
+static int button_action[NUM_MAPPED_BUTTONS];
+
+static int ActionFromSetting(const char *setting)
+{
+    if (setting != NULL)
+    {
+        for (int action = 0; action < NUM_BUTTON_ACTIONS; action++)
+        {
+            if (!strcasecmp(setting, action_settings[action]))
+            {
+                return action;
+            }
+        }
+    }
+
+    return -1;
+}
+
+// Reads a button's action again if its setting changed (the settings file was read, or the menu changed it).
+static int ButtonAction(int button)
+{
+    if (button_settings[button] != button_read_from[button])
+    {
+        int action = ActionFromSetting(button_settings[button]);
+
+        if (action < 0)
+        {
+            printf("heretic360: joystick_button_%s \"%s\" isn't an action; it's %s\n", mapped_buttons[button].setting,
+                   button_settings[button] != NULL ? button_settings[button] : "",
+                   action_settings[mapped_buttons[button].default_action]);
+            action = mapped_buttons[button].default_action;
+            button_settings[button] = (char *) action_settings[action];
+        }
+
+        button_action[button] = action;
+        button_read_from[button] = button_settings[button];
+    }
+
+    return button_action[button];
+}
+
+int I_ButtonAction(int button)
+{
+    return ButtonAction(button);
+}
+
+void I_SetButtonAction(int button, int action)
+{
+    if (button >= 0 && button < NUM_MAPPED_BUTTONS && action >= 0 && action < NUM_BUTTON_ACTIONS)
+    {
+        button_settings[button] = (char *) action_settings[action];
+    }
+}
+
+void I_ResetButtonActions(void)
+{
+    for (int button = 0; button < NUM_MAPPED_BUTTONS; button++)
+    {
+        button_settings[button] = (char *) action_settings[mapped_buttons[button].default_action];
+    }
+}
+
+const char *I_MappedButtonLabel(int button)
+{
+    return mapped_buttons[button].label;
+}
+
+const char *I_ButtonActionLabel(int action)
+{
+    return action_labels[action];
+}
 
 // With always run on, the speed button walks while it's held: Heretic runs with its speed button past the 20 it
 // knows, and walks with none (g_game.c). With always run off, the speed button is an ordinary button that runs.
@@ -259,32 +400,66 @@ static int ButtonState(void)
         return buttons;
     }
 
-    if (TriggerPressed(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)) SET(VB_FIRE);
-    if (TriggerPressed(SDL_GAMEPAD_AXIS_LEFT_TRIGGER)) SET(VB_USE);
-    // A jumps with Crispness' jumping on, and is a second use button otherwise.
-    if (Pressed(SDL_GAMEPAD_BUTTON_SOUTH)) SET(MN_JumpingOn() ? VB_JUMP : VB_USE);
-    if (Pressed(SDL_GAMEPAD_BUTTON_LEFT_STICK)) SET(VB_SPEED);
-    SetSpeedButton(Pressed(SDL_GAMEPAD_BUTTON_LEFT_STICK));
+    // On the map the bumpers zoom and the right stick's click follows the player or lets the map scroll
+    // (heretic/am_map.c), whatever they do in the game.
     if (automapactive)
     {
-        // On the map the bumpers zoom and the right stick's click follows the player or lets the map scroll
-        // (heretic/am_map.c), in place of changing weapons and centring the view.
         if (Pressed(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER) && !bumpers) SET(VB_MAP_ZOOM_OUT);
         if (Pressed(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER) && !bumpers) SET(VB_MAP_ZOOM_IN);
         if (Pressed(SDL_GAMEPAD_BUTTON_RIGHT_STICK)) SET(VB_MAP_FOLLOW);
     }
-    else
+
+    boolean speed_held = false;
+
+    for (int button = 0; button < NUM_MAPPED_BUTTONS; button++)
     {
-        if (Pressed(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)) SET(VB_PREV_WEAPON);
-        if (Pressed(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) SET(VB_NEXT_WEAPON);
-        if (Pressed(SDL_GAMEPAD_BUTTON_RIGHT_STICK)) SET(VB_FLY_CENTER);
+        const mapped_button_t *mapped = &mapped_buttons[button];
+        const int sdl_button = mapped->sdl_button;
+        const boolean held = sdl_button >= 0 ? Pressed((SDL_GamepadButton) sdl_button)
+                                             : TriggerPressed((SDL_GamepadAxis) mapped->sdl_trigger);
+        // Read for every button, held or not, so a setting that isn't an action is in the log from the start.
+        const int action = ButtonAction(button);
+
+        if (!held)
+        {
+            continue;
+        }
+
+        // The map's buttons, and Back while both bumpers are held (the developer menu's combination).
+        if (automapactive && (sdl_button == SDL_GAMEPAD_BUTTON_LEFT_SHOULDER
+                              || sdl_button == SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER
+                              || sdl_button == SDL_GAMEPAD_BUTTON_RIGHT_STICK))
+        {
+            continue;
+        }
+        if (bumpers && sdl_button == SDL_GAMEPAD_BUTTON_BACK)
+        {
+            continue;
+        }
+
+        switch (action)
+        {
+            case ACTION_FIRE:        SET(VB_FIRE); break;
+            case ACTION_USE:         SET(VB_USE); break;
+            // Jumps with Crispness' jumping on, and uses otherwise.
+            case ACTION_USE_JUMP:    SET(MN_JumpingOn() ? VB_JUMP : VB_USE); break;
+            case ACTION_JUMP:        if (MN_JumpingOn()) SET(VB_JUMP); break;
+            case ACTION_SPEED:       SET(VB_SPEED); speed_held = true; break;
+            case ACTION_PREV_WEAPON: SET(VB_PREV_WEAPON); break;
+            case ACTION_NEXT_WEAPON: SET(VB_NEXT_WEAPON); break;
+            case ACTION_INV_LEFT:    SET(VB_INV_LEFT); break;
+            case ACTION_INV_RIGHT:   SET(VB_INV_RIGHT); break;
+            case ACTION_USE_ITEM:    SET(VB_USE_ARTIFACT); break;
+            case ACTION_FLY_UP:      SET(VB_FLY_UP); break;
+            case ACTION_FLY_DOWN:    SET(VB_FLY_DOWN); break;
+            case ACTION_CENTER:      SET(VB_FLY_CENTER); break;
+            case ACTION_MAP:         SET(VB_AUTOMAP); break;
+            case ACTION_MENU:        SET(VB_MENU); break;
+            default: break;
+        }
     }
-    if (Pressed(SDL_GAMEPAD_BUTTON_DPAD_LEFT)) SET(VB_INV_LEFT);
-    if (Pressed(SDL_GAMEPAD_BUTTON_DPAD_RIGHT)) SET(VB_INV_RIGHT);
-    if (Pressed(SDL_GAMEPAD_BUTTON_DPAD_UP) || Pressed(SDL_GAMEPAD_BUTTON_WEST)) SET(VB_USE_ARTIFACT);
-    if (Pressed(SDL_GAMEPAD_BUTTON_NORTH)) SET(VB_FLY_UP);
-    if (Pressed(SDL_GAMEPAD_BUTTON_EAST)) SET(VB_FLY_DOWN);
-    if (Pressed(SDL_GAMEPAD_BUTTON_BACK) && !bumpers) SET(VB_AUTOMAP);
+
+    SetSpeedButton(speed_held);
 
 #undef SET
 
@@ -398,4 +573,14 @@ void I_BindJoystickVariables(void)
     M_BindIntVariable("joystick_dead_zone",         &joystick_dead_zone);
     M_BindIntVariable("joystick_always_run",        &joystick_always_run);
     M_BindIntVariable("joystick_vibration",         &joystick_vibration);
+
+    for (int button = 0; button < NUM_MAPPED_BUTTONS; button++)
+    {
+        char name[40];
+
+        button_settings[button] = (char *) action_settings[mapped_buttons[button].default_action];
+        M_snprintf(name, sizeof(name), "joystick_button_%s", mapped_buttons[button].setting);
+        // m_config.c keeps the name.
+        M_BindStringVariable(M_StringDuplicate(name), &button_settings[button]);
+    }
 }

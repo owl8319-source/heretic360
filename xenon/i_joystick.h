@@ -51,6 +51,19 @@ extern int joystick_vibration;
 // Heretic 360: shakes the controller, strength 0 to 100, for about ms milliseconds, if vibration is on.
 void I_Rumble(int strength, int ms);
 
+// Heretic 360: the buttons that can be given other actions, in the order the Button Layout menu lists them
+// (heretic/mn_menu.c), and the actions. Start always opens the menu. Each is kept in crispy-heretic.cfg as
+// joystick_button_<name> "<action>".
+#define NUM_MAPPED_BUTTONS 15
+#define NUM_BUTTON_ACTIONS 16
+
+int I_ButtonAction(int button);
+void I_SetButtonAction(int button, int action);
+void I_ResetButtonActions(void);
+// What the Button Layout menu shows for a button and an action.
+const char *I_MappedButtonLabel(int button);
+const char *I_ButtonActionLabel(int action);
+
 void I_InitJoystick(void);
 void I_ShutdownJoystick(void);
 void I_UpdateJoystick(void);

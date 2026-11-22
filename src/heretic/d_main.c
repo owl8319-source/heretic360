@@ -517,6 +517,16 @@ void D_PageDrawer(void)
     {
         V_DrawPatch(4, 160, W_CacheLumpName(DEH_String("ADVISOR"), PU_CACHE));
     }
+#ifdef HERETIC360
+    // Heretic 360: the port's version in the title screen's lower right corner, the screen's corner in widescreen
+    // (MN_DrTextA moves what it draws right by WIDESCREENDELTA).
+    if (!strcmp(pagename, DEH_String("TITLE")))
+    {
+        const char *version = "V" HERETIC360_VERSION;
+
+        MN_DrTextA(version, ORIGWIDTH + WIDESCREENDELTA - MN_TextAWidth(version) - 4, ORIGHEIGHT - 11);
+    }
+#endif
     UpdateState |= I_FULLSCRN;
 }
 

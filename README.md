@@ -60,6 +60,14 @@ curl.exe ftp://<console>/Hdd1/Homebrew/Heretic/heretic.log --user '<user>:<passw
 | Back | map | | |
 | Start | menu | | |
 
+That's the layout as the game starts. **Options > Button Layout** gives any button but Start another action (left /
+right to change one; Start always opens the menu), or set them in `crispy-heretic.cfg` as `joystick_button_<button>
+"<action>"`, the buttons being `a b x y lb rb lt rt back lstick rstick dpad_up dpad_down dpad_left dpad_right` and the
+actions `none fire use usejump jump speed prevweapon nextweapon invleft invright useitem flyup flydown center map
+menu` (`usejump` jumps with jumping on and uses otherwise; `speed` walks, or runs with always run off). A name that
+isn't an action is noted in `heretic.log` and the button keeps its default. The menus' buttons, the map's (LB / RB,
+the right stick's click) and the developer menu's combination stay as they are.
+
 **Options > Controller** sets the turn and look speeds, the sticks' dead zone, **invert Y axis**, **always run** (on
 as the game starts; push the stick part way, or click it, to walk) and **vibration** (firing, getting hurt, picking
 things up). **Options > Crispness > page 3 > Jumping** turns jumping on, low or high, as in Crispy Doom; it's off in
@@ -150,15 +158,15 @@ All under the `HERETIC360` define, as in the Chocolate versions.
   each time a screen opens, and only for the saves a listing of the folder found; each save's time is read with its
   name; INFO's first page is the controls page and the PC keyboard pages are skipped; the controller's bumpers turn
   the save and Crispness pages, and the save screen says LB / RB, not PgUp / PgDn; the mouse menu is the Controller
-  menu; Crispness page 3 has Jumping; the console's keyboard names saves (`xenon/i_xam.c`); `MN_JumpingOn`,
+  menu; Options has Button Layout, in Crispness' small font (`SMALL_FONT_MENU`); Crispness page 3 has Jumping; the console's keyboard names saves (`xenon/i_xam.c`); `MN_JumpingOn`,
   `MN_SystemUIOpened` for the controller code.
 - `src/heretic/g_game.c`, `src/heretic/p_user.c`: jumping, as Crispy Doom does it, carried as Hexen does, in the top
   bit of the ticcmd's `arti` (`AFLAG_JUMP`), unless that's 0xff; `player_t` has `jumpTics` (`doomdef.h`), not saved.
-- `src/heretic/d_main.c`: keeps `crispy_jump` in the settings.
+- `src/heretic/d_main.c`: keeps `crispy_jump` in the settings; `D_PageDrawer` shows the version on the title screen.
 - `src/heretic/am_map.c`: the map's controller buttons and scrolling.
 - `src/heretic/p_inter.c`, `src/heretic/p_pspr.c`: vibration when hurt, picking up and firing (`I_Rumble`).
-- `src/m_config.c`: `joystick_dead_zone`, `joystick_always_run` and `joystick_vibration`, kept in
-  `crispy-heretic.cfg`.
+- `src/m_config.c`: `joystick_dead_zone`, `joystick_always_run`, `joystick_vibration` and the
+  `joystick_button_<button>` actions, kept in `crispy-heretic.cfg`.
 - `src/heretic/info360.c` (new): the INFO controls page. Its controller picture, `info360_art.h`, is made by
   `tools/make_controls_art.py` from `art/360_controller.svg`.
 - `opl/opl.c`: SDL3's mutex and condition names; its only driver is `opl_xsdk_driver`.
@@ -168,6 +176,9 @@ Crispy draws a patch partly off the screen clipped, so 0.6's check for one (in `
 
 ## Changes
 
+- **0.8.3** (GitHub issue #1's second request): every button but Start can be given another action, in Options >
+  Button Layout or `crispy-heretic.cfg`; INFO says its controls are the defaults and where to change them; the title
+  screen shows the version in its lower right corner.
 - **0.8.2:** levels load without a 2-second wait: Crispy logs each map's format to stderr as it loads, and stderr
   went to the hard drive at once, so stderr is buffered and written by the log thread too (`xenon/i_main.c`); a menu
   reaching over the status bar no longer leaves its letters there once it closes (`mn_menu.c` redraws the bar whole

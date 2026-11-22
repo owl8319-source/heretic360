@@ -84,6 +84,9 @@ typedef enum
     MENU_CRISPNESS1,
     MENU_CRISPNESS2,
     MENU_CRISPNESS3,
+#ifdef HERETIC360
+    MENU_BUTTONS,
+#endif
     MENU_NONE
 } MenuType_t;
 
@@ -135,6 +138,11 @@ static boolean SCJoyAlwaysRun(int option);
 static boolean SCJoyVibration(int option);
 static boolean CrispyJump(int option);
 static void DrawControllerMenu(void);
+static boolean SCButtonAction(int option);
+static boolean SCButtonReset(int option);
+static void DrawButtonLayout(void);
+static void M_DrawCrispnessBackground(void);
+static void DrawCrispnessHeader(const char *item);
 #endif
 static boolean SCSfxVolume(int option);
 static boolean SCMusicVolume(int option);
@@ -359,6 +367,10 @@ static MenuItem_t OptionsItems[] = {
 #else
     {ITT_SETMENU, "MOUSE SENSITIVITY...", NULL, 0, MENU_MOUSE},
 #endif
+#ifdef HERETIC360
+    // Heretic 360: which action each controller button has.
+    {ITT_SETMENU, "BUTTON LAYOUT...", NULL, 0, MENU_BUTTONS},
+#endif
     {ITT_SETMENU, "MORE...", NULL, 0, MENU_OPTIONS2},
     {ITT_SETMENU, "CRISPNESS...", NULL, 0, MENU_CRISPNESS1}
 };
@@ -366,7 +378,11 @@ static MenuItem_t OptionsItems[] = {
 static Menu_t OptionsMenu = {
     88, 30,
     DrawOptionsMenu,
+#ifdef HERETIC360
+    6, OptionsItems,
+#else
     5, OptionsItems, // [crispy] + Crispness menu, - Mouse slider
+#endif
     0,
     MENU_MAIN
 };
@@ -639,6 +655,42 @@ static const multiitem_t multiitem_sndchannels[3] =
     {32, "32"},
 };
 
+#ifdef HERETIC360
+// Heretic 360: the Button Layout page, in Crispness' small font: a row per button (xenon/i_joystick.c's order), left
+// and right or A going through its actions, and one setting them all back.
+static MenuItem_t ButtonLayoutItems[] = {
+    {ITT_LRFUNC2, "A:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "B:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "X:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "Y:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "LB:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "RB:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "LT:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "RT:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "BACK:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "LEFT STICK CLICK:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "RIGHT STICK CLICK:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "D-PAD UP:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "D-PAD DOWN:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "D-PAD LEFT:", SCButtonAction, 0, MENU_NONE},
+    {ITT_LRFUNC2, "D-PAD RIGHT:", SCButtonAction, 0, MENU_NONE},
+    {ITT_EFUNC, "RESET TO DEFAULTS", SCButtonReset, 0, MENU_NONE},
+};
+
+static Menu_t ButtonLayoutMenu = {
+    48, 22,
+    DrawButtonLayout,
+    NUM_MAPPED_BUTTONS + 1, ButtonLayoutItems,
+    0,
+    MENU_OPTIONS
+};
+
+// The pages in the small font: Crispness' and the Button Layout.
+#define SMALL_FONT_MENU(menu) ((menu)->drawFunc == DrawCrispness || (menu)->drawFunc == DrawButtonLayout)
+#else
+#define SMALL_FONT_MENU(menu) ((menu)->drawFunc == DrawCrispness)
+#endif
+
 static Menu_t *Menus[] = {
     &MainMenu,
     &EpisodeMenu,
@@ -652,6 +704,9 @@ static Menu_t *Menus[] = {
     &Crispness1Menu,
     &Crispness2Menu,
     &Crispness3Menu,
+#ifdef HERETIC360
+    &ButtonLayoutMenu,
+#endif
 };
 
 // [crispy] gamma correction messages
@@ -1068,7 +1123,7 @@ void MN_Drawer(void)
         {
             if (item->type != ITT_EMPTY && item->text)
             {
-                if (CurrentMenu->drawFunc == DrawCrispness)
+                if (SMALL_FONT_MENU(CurrentMenu))
                 {
                 // [JN] Crispness menu: use small "A" font
                 MN_DrTextA(DEH_String(item->text), x, y);
@@ -1078,7 +1133,7 @@ void MN_Drawer(void)
                 MN_DrTextB(DEH_String(item->text), x, y);
                 }
             }
-            if (CurrentMenu->drawFunc == DrawCrispness)
+            if (SMALL_FONT_MENU(CurrentMenu))
             {
             // [JN] Crispness menu: use 10px vertical spacing for small font
             y += ITEM_HEIGHT/2;
@@ -1089,7 +1144,7 @@ void MN_Drawer(void)
             }
             item++;
         }
-        if (CurrentMenu->drawFunc == DrawCrispness)
+        if (SMALL_FONT_MENU(CurrentMenu))
         {
         // [JN] Crispness menu: use small blue gem instead of big red arrow.
         // Blinks a bit faster and shifted right, closer to the text.
@@ -1878,6 +1933,49 @@ static void DrawControllerMenu(void)
     MN_DrTextB(joystick_look_invert ? "ON" : "OFF", 226, 135);
     MN_DrTextB(joystick_always_run ? "ON" : "OFF", 226, 155);
     MN_DrTextB(joystick_vibration ? "ON" : "OFF", 226, 175);
+}
+
+// The Button Layout page: the highlighted row's button goes through the actions (I_SetButtonAction).
+static boolean SCButtonAction(int option)
+{
+    const int button = CurrentItPos;
+    int action = I_ButtonAction(button);
+
+    if (button < 0 || button >= NUM_MAPPED_BUTTONS)
+    {
+        return false;
+    }
+
+    action = (option == LEFT_DIR) ? action + NUM_BUTTON_ACTIONS - 1 : action + 1;
+    I_SetButtonAction(button, action % NUM_BUTTON_ACTIONS);
+    return true;
+}
+
+static boolean SCButtonReset(int option)
+{
+    I_ResetButtonActions();
+    return true;
+}
+
+static void DrawButtonLayout(void)
+{
+    const char *note = "START ALWAYS OPENS THE MENU";
+
+    M_DrawCrispnessBackground();
+    DrawCrispnessHeader("BUTTON LAYOUT");
+
+    for (int button = 0; button < NUM_MAPPED_BUTTONS; button++)
+    {
+        const int action = I_ButtonAction(button);
+
+        // Green as set, dark for nothing, as Crispness shows its settings.
+        dp_translation = action ? cr[CR_GREEN] : cr[CR_DARK];
+        MN_DrTextA(I_ButtonActionLabel(action), 178, ButtonLayoutMenu.y + button * (ITEM_HEIGHT / 2));
+    }
+
+    dp_translation = cr[CR_GOLD];
+    MN_DrTextA(note, 160 - MN_TextAWidth(note) / 2, ButtonLayoutMenu.y + (NUM_MAPPED_BUTTONS + 1) * (ITEM_HEIGHT / 2) + 4);
+    dp_translation = NULL;
 }
 
 // Whether jumping is on as the game may use it: Crispy's setting, off in demos and network games (crispy.c).

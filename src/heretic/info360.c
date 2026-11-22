@@ -4,6 +4,7 @@
 
 #include "doomdef.h"
 #include "crispy.h"
+#include "v_trans.h"
 #include "deh_str.h"
 #include "i_video.h"
 #include "v_video.h"
@@ -19,12 +20,12 @@
 #define TITLE_Y 3
 
 // The list under the controller: two columns, the button then what it does.
-#define LIST_TOP 126
+#define LIST_TOP 135
 #define LIST_ROW 9
 #define LEFT_BUTTON_X 6
 #define LEFT_ACTION_X 73
 #define RIGHT_BUTTON_X 166
-#define RIGHT_ACTION_X 222
+#define RIGHT_ACTION_X 228
 
 typedef struct
 {
@@ -32,26 +33,25 @@ typedef struct
     const char *action;
 } control_t;
 
+// The controls as the game starts; Options > Button Layout changes them (xenon/i_joystick.c).
 static const control_t left_column[] = {
     { "LT",       "USE" },
-    { "LB",       "PREV WEAPON" },
+    { "RT",       "FIRE" },
+    { "LB / RB",  "WEAPONS" },
     { "L STICK",  "MOVE" },
-    { "D-PAD",    "INVENTORY" },
-    { "D-PAD UP", "USE ITEM" },
-    { "BACK",     "MAP" },
-    { "START",    "MENU" },
+    { "R STICK",  "TURN / LOOK" },
     { "L CLICK",  "WALK / RUN" },
+    { "R CLICK",  "CENTER VIEW" },
 };
 
 static const control_t right_column[] = {
-    { "RT",       "FIRE" },
-    { "RB",       "NEXT WEAPON" },
-    { "R STICK",  "TURN / LOOK" },
-    { "R CLICK",  "CENTER VIEW" },
     { "A",        "USE / JUMP" },
-    { "X",        "USE ITEM" },
+    { "X / D-UP", "USE ITEM" },
     { "Y / B",    "FLY UP / DOWN" },
-    { "LB / RB",  "MAP ZOOM" },
+    { "D-PAD",    "INVENTORY" },
+    { "BACK",     "MAP" },
+    { "START",    "MENU" },
+    { "ON MAP",   "LB / RB ZOOM" },
 };
 
 // Names beside the shoulder buttons on the drawing.
@@ -136,7 +136,8 @@ static void DrawColumn(const control_t *controls, int count, int button_x, int a
 
 void MN_DrawControls360(void)
 {
-    const char *title = "CONTROLS";
+    const char *title = "DEFAULT CONTROLS";
+    const char *note = "CHANGE THEM IN OPTIONS - BUTTON LAYOUT";
 
     DrawDarkTitle();
     MN_DrTextB(title, 160 - MN_TextBWidth(title) / 2, TITLE_Y);
@@ -146,6 +147,11 @@ void MN_DrawControls360(void)
     {
         MN_DrTextA(tags[i].text, tags[i].x, tags[i].y);
     }
+
+    // Under the controller, in gold.
+    dp_translation = cr[CR_GOLD];
+    MN_DrTextA(note, 160 - MN_TextAWidth(note) / 2, CONTROLS_ART_Y + CONTROLS_ART_H + 2);
+    dp_translation = NULL;
 
     DrawColumn(left_column, COUNT(left_column), LEFT_BUTTON_X, LEFT_ACTION_X);
     DrawColumn(right_column, COUNT(right_column), RIGHT_BUTTON_X, RIGHT_ACTION_X);

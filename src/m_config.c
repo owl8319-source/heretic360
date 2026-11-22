@@ -1482,6 +1482,28 @@ static default_t extra_defaults_list[] =
     //
 
     CONFIG_VARIABLE_INT(joystick_vibration),
+
+    //!
+    // Heretic 360: what each of the controller's buttons does in the game, by name (xenon/i_joystick.c): none, fire,
+    // use, usejump (jump with jumping on, else use), jump, speed (walk, or run with always run off), prevweapon,
+    // nextweapon, invleft, invright, useitem, flyup, flydown, center, map or menu. Start always opens the menu.
+    //
+
+    CONFIG_VARIABLE_STRING(joystick_button_a),
+    CONFIG_VARIABLE_STRING(joystick_button_b),
+    CONFIG_VARIABLE_STRING(joystick_button_x),
+    CONFIG_VARIABLE_STRING(joystick_button_y),
+    CONFIG_VARIABLE_STRING(joystick_button_lb),
+    CONFIG_VARIABLE_STRING(joystick_button_rb),
+    CONFIG_VARIABLE_STRING(joystick_button_lt),
+    CONFIG_VARIABLE_STRING(joystick_button_rt),
+    CONFIG_VARIABLE_STRING(joystick_button_back),
+    CONFIG_VARIABLE_STRING(joystick_button_lstick),
+    CONFIG_VARIABLE_STRING(joystick_button_rstick),
+    CONFIG_VARIABLE_STRING(joystick_button_dpad_up),
+    CONFIG_VARIABLE_STRING(joystick_button_dpad_down),
+    CONFIG_VARIABLE_STRING(joystick_button_dpad_left),
+    CONFIG_VARIABLE_STRING(joystick_button_dpad_right),
 #endif
 
     //!

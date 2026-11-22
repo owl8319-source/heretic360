@@ -9,6 +9,24 @@ Versions up to 0.7 were built on Chocolate Doom 3.1.1, closer to the original; t
 
 You need your own `heretic.wad` (v1.3, Shadow of the Serpent Riders). It isn't included.
 
+## Screenshots
+
+These were taken at 1280x720 from the same v0.8.3 code running on a PC, since the 360 can't save
+screenshots itself. On the console the game looks the same.
+
+| | |
+|---|---|
+| ![Title screen](screenshots/01-title-screen.png) | ![E1M2](screenshots/02-e1m2-widescreen.png) |
+| Title screen, with the version in the corner | E1M2 in widescreen, high resolution |
+| ![E3M3](screenshots/03-e3m3-widescreen.png) | ![E4M1](screenshots/04-e4m1-widescreen.png) |
+| E3M3 | E4M1 |
+| ![Phoenix Rod in E5M1](screenshots/05-e5m1-phoenix-rod.png) | ![Default controls](screenshots/06-info-controls.png) |
+| The Phoenix Rod in E5M1 | The INFO page's default controls |
+| ![Crispness options](screenshots/07-crispness-options.png) | ![Button layout](screenshots/08-button-layout.png) |
+| Crispness options | Button layout, under Options |
+
+Heretic's graphics are from your own `heretic.wad`, copyright Raven Software and id Software.
+
 ## Download
 
 Each release on the [Releases page](https://github.com/owl8319-source/heretic360/releases) has a ready-built

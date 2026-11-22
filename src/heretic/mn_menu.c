@@ -1003,6 +1003,16 @@ void MN_Drawer(void)
     const char *message;
     const char *selName;
 
+#ifdef HERETIC360
+    // Heretic 360: the status bar is drawn again whole each frame a menu or question is up, and the frame after: the
+    // status bar only draws what changed (sb_bar.c), so a menu reaching over it, as the Controller menu, the save
+    // screens and Crispness' do, left its letters there once it closed or gave way to a shorter one.
+    if (MenuActive || askforquit)
+    {
+        SB_state = -1;
+    }
+#endif
+
     if (MenuActive == false)
     {
         if (askforquit)

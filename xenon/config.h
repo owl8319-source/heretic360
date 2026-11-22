@@ -6,7 +6,7 @@
 #define PACKAGE_NAME "Crispy Doom"
 #define PACKAGE_TARNAME "crispy-doom"
 #define PACKAGE_VERSION "7.2"
-#define PACKAGE_STRING "Heretic 360 0.8.1 (Crispy Doom 7.2)"
+#define PACKAGE_STRING "Heretic 360 0.8.2 (Crispy Doom 7.2)"
 #define PROGRAM_PREFIX "crispy-"
 
 // newlib has <dirent.h> and declares strcasecmp and strncasecmp in <strings.h>.

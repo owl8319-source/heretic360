@@ -38,4 +38,4 @@ target_link_libraries(heretic PRIVATE SDL3::SDL3-static)
 xsdk_add_shaders(heretic xenon/blit.vert xenon/blit.frag)
 # A title ID of its own ("H360"), not the one every xsdk title without one shares, and the name Aurora and the
 # dashboard show.
-xsdk_add_xex(heretic TITLE_ID 0x48333630 NAME "Heretic" VERSION 0.8.1.0)
+xsdk_add_xex(heretic TITLE_ID 0x48333630 NAME "Heretic" VERSION 0.8.2.0)

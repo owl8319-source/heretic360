@@ -146,7 +146,7 @@ All under the `HERETIC360` define, as in the Chocolate versions.
   counter is Crispy's `showfps`); `SB_DevTickerOn`.
 - `src/heretic/doomdef.h`: declares the cheat menu, those two and the controls page.
 - `src/heretic/d_main.c`: the cheat menu takes events first and draws last; the PAUSED graphic hides under it.
-- `src/heretic/mn_menu.c`: the save and load screens' slot names are read at startup and when the page changes, not
+- `src/heretic/mn_menu.c`: the status bar is drawn whole each frame a menu is up (`SB_state`); the save and load screens' slot names are read at startup and when the page changes, not
   each time a screen opens, and only for the saves a listing of the folder found; each save's time is read with its
   name; INFO's first page is the controls page and the PC keyboard pages are skipped; the controller's bumpers turn
   the save and Crispness pages, and the save screen says LB / RB, not PgUp / PgDn; the mouse menu is the Controller
@@ -168,6 +168,10 @@ Crispy draws a patch partly off the screen clipped, so 0.6's check for one (in `
 
 ## Changes
 
+- **0.8.2:** levels load without a 2-second wait: Crispy logs each map's format to stderr as it loads, and stderr
+  went to the hard drive at once, so stderr is buffered and written by the log thread too (`xenon/i_main.c`); a menu
+  reaching over the status bar no longer leaves its letters there once it closes (`mn_menu.c` redraws the bar whole
+  while a menu is up). 0.8.1 wasn't released on its own.
 - **0.8.1** (GitHub issue #1, and more): a Controller menu in place of the mouse's: turn and look speeds, dead zone,
   invert Y, always run on or off, vibration; jumping (Crispness page 3), on A; clicking the left stick walks, or runs
   with always run off; the map zooms on LB / RB, follows the player or not on the right stick's click, and scrolls on

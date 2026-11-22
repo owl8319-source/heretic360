@@ -1,11 +1,13 @@
-// Heretic 360: Chocolate Doom's i_main.c for xsdk. xsdk opens the log (heretic.log beside the .xex) before main, and
-// stdout and stderr go to it, so Chocolate Doom's startup messages land there too.
+// Heretic 360: Crispy Doom's i_main.c for xsdk. xsdk opens the log (heretic.log beside the .xex) before main, and
+// stdout and stderr go to it, so Crispy Doom's startup messages land there too.
 //
 // The log writes to the hard drive as it's given lines, from the thread that gives them, and on the console a write
 // can wait seconds for an idle drive to wake (xsdk docs/HARDWARE.md, "The log's file grows a unit at a time"). So
-// stdout is buffered here, and a writer thread takes what's in it to the log once a second: the game's thread only
-// copies its lines into memory. stderr stays unbuffered, so an error's message is in the log before the game ends;
-// exit, which I_Quit and I_Error end with, writes out what's left of stdout.
+// stdout and stderr are buffered here, and a writer thread takes what's in them to the log once a second: the game's
+// thread only copies its lines into memory. exit, which I_Quit and I_Error end with, writes out what's left, so an
+// error's message still reaches the log. stderr is buffered too because Crispy writes there as levels load
+// (P_CheckMapFormat), which in 0.8 made every level's load wait about 2 seconds on the drive. Within a second, lines
+// of the two may land out of order; a hard crash loses up to a second of them.
 
 #include "config.h"
 
@@ -27,6 +29,7 @@ void D_DoomMain(void);
 #define LOG_WRITE_INTERVAL_MS 1000
 
 static char log_buffer[LOG_BUFFER_BYTES];
+static char error_log_buffer[LOG_BUFFER_BYTES / 4];
 
 static int SDLCALL LogWriter(void *data)
 {
@@ -35,6 +38,7 @@ static int SDLCALL LogWriter(void *data)
     for (;;)
     {
         SDL_Delay(LOG_WRITE_INTERVAL_MS);
+        fflush(stderr);
         fflush(stdout);
     }
 
@@ -46,7 +50,7 @@ static void StartLogWriter(void)
     SDL_Thread *thread;
 
     setvbuf(stdout, log_buffer, _IOFBF, sizeof(log_buffer));
-    setvbuf(stderr, NULL, _IONBF, 0);
+    setvbuf(stderr, error_log_buffer, _IOFBF, sizeof(error_log_buffer));
 
     thread = SDL_CreateThread(LogWriter, "heretic360 log", NULL);
 
@@ -54,6 +58,7 @@ static void StartLogWriter(void)
     {
         // Without the writer, lines go to the log as they're finished.
         setvbuf(stdout, NULL, _IOLBF, BUFSIZ);
+        setvbuf(stderr, NULL, _IONBF, 0);
         printf("heretic360: no log writer thread (%s), so lines are logged as they come\n", SDL_GetError());
         return;
     }

@@ -75,6 +75,8 @@ enum
     VB_MAP_ZOOM_OUT = JOY_MAP_ZOOM_OUT_BUTTON,
     VB_MAP_ZOOM_IN = JOY_MAP_ZOOM_IN_BUTTON,
     VB_MAP_FOLLOW = JOY_MAP_FOLLOW_BUTTON,
+    VB_QUICKSAVE = JOY_QUICKSAVE_BUTTON,
+    VB_QUICKLOAD = JOY_QUICKLOAD_BUTTON,
 };
 
 // Heretic's g_game.c treats a speed button past its 20 buttons as always held: always run.
@@ -119,6 +121,8 @@ enum
     ACTION_CENTER,
     ACTION_MAP,
     ACTION_MENU,
+    ACTION_QUICKSAVE,
+    ACTION_QUICKLOAD,
 };
 
 typedef struct
@@ -152,11 +156,13 @@ static const mapped_button_t mapped_buttons[NUM_MAPPED_BUTTONS] = {
 static const char *const action_settings[NUM_BUTTON_ACTIONS] = {
     "none", "fire", "use", "usejump", "jump", "speed", "prevweapon", "nextweapon",
     "invleft", "invright", "useitem", "flyup", "flydown", "center", "map", "menu",
+    "quicksave", "quickload",
 };
 
 static const char *const action_labels[NUM_BUTTON_ACTIONS] = {
     "NOTHING", "FIRE", "USE", "USE / JUMP", "JUMP", "WALK / RUN", "PREV WEAPON", "NEXT WEAPON",
     "INVENTORY LEFT", "INVENTORY RIGHT", "USE ITEM", "FLY UP", "FLY DOWN", "CENTER VIEW", "MAP", "MENU",
+    "QUICK SAVE", "QUICK LOAD",
 };
 
 // The settings as m_config.c keeps them, and the setting each button's action was last read from.
@@ -455,6 +461,8 @@ static int ButtonState(void)
             case ACTION_CENTER:      SET(VB_FLY_CENTER); break;
             case ACTION_MAP:         SET(VB_AUTOMAP); break;
             case ACTION_MENU:        SET(VB_MENU); break;
+            case ACTION_QUICKSAVE:   SET(VB_QUICKSAVE); break;
+            case ACTION_QUICKLOAD:   SET(VB_QUICKLOAD); break;
             default: break;
         }
     }

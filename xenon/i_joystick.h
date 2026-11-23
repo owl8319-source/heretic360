@@ -19,6 +19,10 @@
 #define JOY_MAP_ZOOM_IN_BUTTON 16
 #define JOY_MAP_FOLLOW_BUTTON 17
 
+// Heretic 360: quick save and quick load, as F6 and F9 (heretic/mn_menu.c).
+#define JOY_QUICKSAVE_BUTTON 18
+#define JOY_QUICKLOAD_BUTTON 19
+
 // Directional input in an ev_joystick's data6, as the menus read it.
 #define DPAD_SHIFT 0
 #define LSTICK_SHIFT 4
@@ -55,7 +59,7 @@ void I_Rumble(int strength, int ms);
 // (heretic/mn_menu.c), and the actions. Start always opens the menu. Each is kept in crispy-heretic.cfg as
 // joystick_button_<name> "<action>".
 #define NUM_MAPPED_BUTTONS 15
-#define NUM_BUTTON_ACTIONS 16
+#define NUM_BUTTON_ACTIONS 18
 
 int I_ButtonAction(int button);
 void I_SetButtonAction(int button, int action);

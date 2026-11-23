@@ -82,7 +82,9 @@ That's the layout as the game starts. **Options > Button Layout** gives any butt
 right to change one; Start always opens the menu), or set them in `crispy-heretic.cfg` as `joystick_button_<button>
 "<action>"`, the buttons being `a b x y lb rb lt rt back lstick rstick dpad_up dpad_down dpad_left dpad_right` and the
 actions `none fire use usejump jump speed prevweapon nextweapon invleft invright useitem flyup flydown center map
-menu` (`usejump` jumps with jumping on and uses otherwise; `speed` walks, or runs with always run off). A name that
+menu quicksave quickload` (`usejump` jumps with jumping on and uses otherwise; `speed` walks, or runs with always run off). `quicksave` and `quickload` work as F6
+and F9 do on a PC: the first time, they open the save or load screen to choose the slot; after that they ask before
+saving to it or loading it again (A for yes, B for no). A name that
 isn't an action is noted in `heretic.log` and the button keeps its default. The menus' buttons, the map's (LB / RB,
 the right stick's click) and the developer menu's combination stay as they are.
 
@@ -115,6 +117,11 @@ cheats, which work on every skill level:
 D-pad or left stick chooses, A selects, B closes. It isn't in the main menu or the options.
 
 ## Display
+
+**Options > Display** has **brightness** (Crispy's 18 levels, -4 to 4; 0, the default, is the original's) and
+**picture size**, 80% to 100% of the screen, for a TV that cuts off the picture's edges (overscan). The picture is
+shrunk evenly in the middle of the screen, with black around it, so nothing is stretched. Both are saved, as
+`crispy_gamma` and `display_size`.
 
 Crispy's options are under **Options > Crispness**. As Crispy starts:
 
@@ -194,6 +201,9 @@ Crispy draws a patch partly off the screen clipped, so 0.6's check for one (in `
 
 ## Changes
 
+- **0.8.4** (GitHub issue #1's third request): quick save and quick load, which can go on any button (Options >
+  Button Layout; no button has them to start with); Options > Display, with brightness (only F11 changed it before)
+  and a picture size for TVs with overscan. The Options menu sits a little higher for its seventh item.
 - **0.8.3** (GitHub issue #1's second request): every button but Start can be given another action, in Options >
   Button Layout or `crispy-heretic.cfg`; INFO says its controls are the defaults and where to change them; the title
   screen shows the version in its lower right corner.

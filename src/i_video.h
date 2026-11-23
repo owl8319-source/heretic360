@@ -122,6 +122,13 @@ extern int fullscreen;
 extern int aspect_ratio_correct;
 extern int integer_scaling;
 extern int smooth_pixel_scaling;
+#ifdef HERETIC360
+// Heretic 360: the picture's size as a percentage of the screen's, for TVs that cut off its edges (xenon/i_video.c).
+extern int display_size;
+#define DISPLAY_SIZE_MIN 80
+#define DISPLAY_SIZE_MAX 100
+#define DISPLAY_SIZE_STEP 2
+#endif
 extern int vga_porch_flash;
 extern int force_software_renderer;
 

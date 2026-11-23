@@ -130,6 +130,9 @@ int fullscreen = true;
 int aspect_ratio_correct = 1;
 // 0 draws the frame point sampled, sharp pixels; 1 filters it.
 int smooth_pixel_scaling = false;
+// The picture's size, percent of the screen, and the size the quad was last written at.
+int display_size = DISPLAY_SIZE_MAX;
+static int quad_display_size = -1;
 int integer_scaling = false;
 int vga_porch_flash = false;
 int force_software_renderer = false;
@@ -212,8 +215,16 @@ static void WriteQuad(void)
         quad_height = (int) display_width * shown_height / SCREENWIDTH;
     }
 
-    printf("heretic360: frame %dx%d, drawn %dx%d in the middle of %ux%u\n", SCREENWIDTH, SCREENHEIGHT, quad_width,
-           quad_height, (unsigned) display_width, (unsigned) display_height);
+    // Shrunk evenly, in the middle of the screen, for a TV that cuts off the edges.
+    int size = display_size;
+    if (size < DISPLAY_SIZE_MIN) size = DISPLAY_SIZE_MIN;
+    if (size > DISPLAY_SIZE_MAX) size = DISPLAY_SIZE_MAX;
+    quad_width = quad_width * size / 100;
+    quad_height = quad_height * size / 100;
+    quad_display_size = display_size;
+
+    printf("heretic360: frame %dx%d, drawn %dx%d (%d%%) in the middle of %ux%u\n", SCREENWIDTH, SCREENHEIGHT,
+           quad_width, quad_height, size, (unsigned) display_width, (unsigned) display_height);
 
     const float half_width = (float) quad_width / (float) display_width;
     const float half_height = (float) quad_height / (float) display_height;
@@ -465,6 +476,13 @@ void I_FinishUpdate(void)
             fpscount = 0;
             lastmili = mili;
         }
+    }
+
+    // The picture's size changed (Options > Display): the quad is written again once the GPU is done with it.
+    if (display_size != quad_display_size)
+    {
+        WaitForGPU();
+        WriteQuad();
     }
 
     V_DrawDiskIcon();
@@ -729,6 +747,7 @@ void I_BindVideoVariables(void)
     M_BindIntVariable("aspect_ratio_correct",      &aspect_ratio_correct);
     M_BindIntVariable("integer_scaling",           &integer_scaling);
     M_BindIntVariable("smooth_pixel_scaling",      &smooth_pixel_scaling);
+    M_BindIntVariable("display_size",              &display_size);
     M_BindIntVariable("vga_porch_flash",           &vga_porch_flash);
     M_BindIntVariable("startup_delay",             &startup_delay);
     M_BindIntVariable("fullscreen_width",          &fullscreen_width);

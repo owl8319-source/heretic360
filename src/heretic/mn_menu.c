@@ -86,6 +86,7 @@ typedef enum
     MENU_CRISPNESS3,
 #ifdef HERETIC360
     MENU_BUTTONS,
+    MENU_DISPLAY,
 #endif
     MENU_NONE
 } MenuType_t;
@@ -141,6 +142,9 @@ static void DrawControllerMenu(void);
 static boolean SCButtonAction(int option);
 static boolean SCButtonReset(int option);
 static void DrawButtonLayout(void);
+static boolean SCBrightness(int option);
+static boolean SCPictureSize(int option);
+static void DrawDisplayMenu(void);
 static void M_DrawCrispnessBackground(void);
 static void DrawCrispnessHeader(const char *item);
 #endif
@@ -370,16 +374,23 @@ static MenuItem_t OptionsItems[] = {
 #ifdef HERETIC360
     // Heretic 360: which action each controller button has.
     {ITT_SETMENU, "BUTTON LAYOUT...", NULL, 0, MENU_BUTTONS},
+    // Heretic 360: brightness, and the picture's size for TVs that cut off its edges.
+    {ITT_SETMENU, "DISPLAY...", NULL, 0, MENU_DISPLAY},
 #endif
     {ITT_SETMENU, "MORE...", NULL, 0, MENU_OPTIONS2},
     {ITT_SETMENU, "CRISPNESS...", NULL, 0, MENU_CRISPNESS1}
 };
 
 static Menu_t OptionsMenu = {
+#ifdef HERETIC360
+    // Heretic 360: higher up, so the seventh item clears the status bar.
+    88, 15,
+#else
     88, 30,
+#endif
     DrawOptionsMenu,
 #ifdef HERETIC360
-    6, OptionsItems,
+    7, OptionsItems,
 #else
     5, OptionsItems, // [crispy] + Crispness menu, - Mouse slider
 #endif
@@ -685,6 +696,23 @@ static Menu_t ButtonLayoutMenu = {
     MENU_OPTIONS
 };
 
+// The Display page: brightness (Crispy's gamma levels, as F11 goes through them) and the picture's size
+// (xenon/i_video.c's display_size).
+static MenuItem_t DisplayItems[] = {
+    {ITT_LRFUNC, "BRIGHTNESS", SCBrightness, 0, MENU_NONE},
+    {ITT_EMPTY, NULL, NULL, 0, MENU_NONE},
+    {ITT_LRFUNC, "PICTURE SIZE", SCPictureSize, 0, MENU_NONE},
+    {ITT_EMPTY, NULL, NULL, 0, MENU_NONE},
+};
+
+static Menu_t DisplayMenu = {
+    70, 30,
+    DrawDisplayMenu,
+    4, DisplayItems,
+    0,
+    MENU_OPTIONS
+};
+
 // The pages in the small font: Crispness' and the Button Layout.
 #define SMALL_FONT_MENU(menu) ((menu)->drawFunc == DrawCrispness || (menu)->drawFunc == DrawButtonLayout)
 #else
@@ -706,6 +734,7 @@ static Menu_t *Menus[] = {
     &Crispness3Menu,
 #ifdef HERETIC360
     &ButtonLayoutMenu,
+    &DisplayMenu,
 #endif
 };
 
@@ -1457,13 +1486,19 @@ static void DrawFileSlots(Menu_t * menu)
 
 static void DrawOptionsMenu(void)
 {
+    // Heretic 360: the menu is 15 pixels higher (OptionsMenu).
+#ifdef HERETIC360
+    const int y = OptionsMenu.y + ITEM_HEIGHT;
+#else
+    const int y = 50;
+#endif
     if (messageson)
     {
-        MN_DrTextB(DEH_String("ON"), 196, 50);
+        MN_DrTextB(DEH_String("ON"), 196, y);
     }
     else
     {
-        MN_DrTextB(DEH_String("OFF"), 196, 50);
+        MN_DrTextB(DEH_String("OFF"), 196, y);
     }
 }
 
@@ -1978,6 +2013,59 @@ static void DrawButtonLayout(void)
     dp_translation = NULL;
 }
 
+// Crispy's gamma levels, darkest first; 9 is off, the default.
+#define BRIGHTNESS_LEVELS 18
+
+static const char *const brightness_shown[BRIGHTNESS_LEVELS] = {
+    "-4", "-3.6", "-3.2", "-2.8", "-2.4", "-2", "-1.6", "-1.2", "-0.8",
+    "0", "0.5", "1", "1.5", "2", "2.5", "3", "3.5", "4",
+};
+
+static void SetBrightness(int level)
+{
+    crispy->gamma = Clamp(level, 0, BRIGHTNESS_LEVELS - 1);
+#ifndef CRISPY_TRUECOLOR
+    I_SetPalette((byte *) W_CacheLumpName("PLAYPAL", PU_CACHE));
+#else
+    I_SetPalette(0);
+    R_InitColormaps();
+    BorderNeedRefresh = true;
+    SB_state = -1;
+#endif
+}
+
+static boolean SCBrightness(int option)
+{
+    SetBrightness(crispy->gamma + (option == RIGHT_DIR ? 1 : -1));
+    return true;
+}
+
+static boolean SCPictureSize(int option)
+{
+    const int size = Clamp(display_size, DISPLAY_SIZE_MIN, DISPLAY_SIZE_MAX);
+
+    display_size = Clamp(size + (option == RIGHT_DIR ? DISPLAY_SIZE_STEP : -DISPLAY_SIZE_STEP),
+                         DISPLAY_SIZE_MIN, DISPLAY_SIZE_MAX);
+    return true;
+}
+
+static void DrawDisplayMenu(void)
+{
+    const int level = Clamp(crispy->gamma, 0, BRIGHTNESS_LEVELS - 1);
+    const int size = Clamp(display_size, DISPLAY_SIZE_MIN, DISPLAY_SIZE_MAX);
+    const char *note = "SHRINK THE PICTURE IF THE TV CUTS OFF ITS EDGES";
+
+    M_StringCopy(slider_shown, brightness_shown[level], sizeof(slider_shown));
+    DrawSlider(&DisplayMenu, 1, BRIGHTNESS_LEVELS, level);
+    M_snprintf(slider_shown, sizeof(slider_shown), "%d%%", size);
+    DrawSlider(&DisplayMenu, 3, (DISPLAY_SIZE_MAX - DISPLAY_SIZE_MIN) / DISPLAY_SIZE_STEP + 1,
+               (size - DISPLAY_SIZE_MIN) / DISPLAY_SIZE_STEP);
+
+    dp_translation = cr[CR_GOLD];
+    MN_DrTextA(note, 160 - MN_TextAWidth(note) / 2, DisplayMenu.y + 4 * ITEM_HEIGHT + 10);
+    dp_translation = NULL;
+}
+
 // Whether jumping is on as the game may use it: Crispy's setting, off in demos and network games (crispy.c).
 int MN_JumpingOn(void)
 {
@@ -2458,6 +2546,27 @@ boolean MN_Responder(event_t * event)
 
     if (event->type == ev_joystick)
     {
+#ifdef HERETIC360
+        // Heretic 360: a button given quick save or quick load (Button Layout) works as F6 or F9 as it's pressed,
+        // outside the menus; holding it doesn't ask again.
+        static int quick_held = 0;
+        const int quick_now = event->data1 & ((1 << JOY_QUICKSAVE_BUTTON) | (1 << JOY_QUICKLOAD_BUTTON));
+        const int quick_pressed = quick_now & ~quick_held;
+
+        quick_held = quick_now;
+
+        if (!MenuActive && !askforquit && !chatmodeon)
+        {
+            if (quick_pressed & (1 << JOY_QUICKSAVE_BUTTON))
+            {
+                key = key_menu_qsave;
+            }
+            else if (quick_pressed & (1 << JOY_QUICKLOAD_BUTTON))
+            {
+                key = key_menu_qload;
+            }
+        }
+#endif
         // Simulate key presses from joystick events to interact with the menu.
 
         if (MenuActive)

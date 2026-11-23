@@ -801,6 +801,9 @@ static default_t extra_defaults_list[] =
     //
 
     CONFIG_VARIABLE_INT(smooth_pixel_scaling),
+#ifdef HERETIC360
+    CONFIG_VARIABLE_INT(display_size),
+#endif
 
     //!
     // If non-zero, forces integer scales for resolution-independent rendering.

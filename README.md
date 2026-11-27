@@ -135,10 +135,40 @@ The game is always drawn the right shape on the 720p display (Heretic's 200 line
 monitor) and scaled to the console's output. If high resolution with widescreen runs slowly, the developer menu's
 frame-rate counter shows it; high resolution off is about a quarter of the drawing.
 
+## Music: AdLib or recordings
+
+The music plays as Heretic sounded on a Sound Blaster (AdLib), or, with **Options > More > Music: Digital**, from
+recordings of the songs that you supply, as OGG Vorbis or MP3 files. Heretic never had a CD soundtrack (Hexen did,
+and Hexen 360 plays its tracks the same way), so the files are named after the songs in the WAD. Put them in a
+`music` folder beside `heretic.xex`:
+
+| File | Plays |
+|---|---|
+| `e1m1.ogg` ... `e1m9.ogg`, `e2m1.ogg` ... `e3m9.ogg` | that level's song (episodes 4 and 5 reuse these, as the game does) |
+| `titl.ogg` | the title screen |
+| `intr.ogg` | between levels |
+| `cptd.ogg` | the end of an episode |
+
+- Names with the WAD's `mus_` in front (`mus_e1m1.ogg`) work too, in any case. A song with no file plays as AdLib,
+  so a partial set still has music everywhere. Files for the later episodes' own levels (`e4m1.ogg` to `e5m9.ogg`),
+  if you have them, play in place of the songs those levels reuse.
+- OGG loops cleanly; MP3 leaves a short gap where a song starts again, so OGG (quality 6 or so) is the better choice.
+  Where a song has both, the OGG plays.
+- Recordings of the soundtrack on a Roland Sound Canvas, and remakes of it, have been made by fans; rename their
+  files to the names above. Like the WAD, they aren't included.
+- The setting changes as you play, the music volume works on both, and it's saved as `music_files` in
+  `crispy-heretic.cfg`. `heretic.log` lists the files found and notes any it can't play (which then play as AdLib).
+- The files are read and decoded on a thread of their own, on another core, so the game never waits on the hard
+  drive or the decoder. The player is Hexen 360's (`xenon/i_musicfiles.c`; the decoders, stb_vorbis and dr_mp3, are
+  in `third_party/`).
+
+To copy them over: `curl.exe -T C:\path\to\music\e1m1.ogg --ftp-create-dirs ftp://<console>/Hdd1/Homebrew/Heretic/music/
+--user '<user>:<password>'` for each file.
+
 ## What this version does and doesn't do yet
 
 - **Does:** the whole game with Crispy's options; sound effects; music, as Heretic sounded on a Sound Blaster (AdLib
-  OPL, emulated by Nuked OPL3); the controller; settings and saves; a developer cheat menu.
+  OPL, emulated by Nuked OPL3), or from recordings you supply (OGG or MP3); the controller; settings and saves; a developer cheat menu.
 - **Not yet:** an icon for Aurora (xsdk's `.xex` packer can't put one in yet).
 
 ## Layout
@@ -201,6 +231,8 @@ Crispy draws a patch partly off the screen clipped, so 0.6's check for one (in `
 
 ## Changes
 
+- **0.8.5:** music from recordings of the songs, as OGG or MP3 files in a `music` folder (Options > More > Music:
+  Digital), with Hexen 360's player; a song without a file plays as AdLib.
 - **0.8.4** (GitHub issue #1's third request): quick save and quick load, which can go on any button (Options >
   Button Layout; no button has them to start with); Options > Display, with brightness (only F11 changed it before)
   and a picture size for TVs with overscan. The Options menu sits a little higher for its seventh item.

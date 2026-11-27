@@ -25,6 +25,7 @@
 #include "doomkeys.h"
 #include "i_input.h"
 #include "i_joystick.h"
+#include "i_musicfiles.h"
 #include "i_system.h"
 #include "i_timer.h"
 #include "i_swap.h"
@@ -145,6 +146,7 @@ static void DrawButtonLayout(void);
 static boolean SCBrightness(int option);
 static boolean SCPictureSize(int option);
 static void DrawDisplayMenu(void);
+static boolean SCMusicFiles(int option);
 static void M_DrawCrispnessBackground(void);
 static void DrawCrispnessHeader(const char *item);
 #endif
@@ -445,13 +447,21 @@ static MenuItem_t Options2Items[] = {
     {ITT_LRFUNC, "SFX VOLUME", SCSfxVolume, 0, MENU_NONE},
     {ITT_EMPTY, NULL, NULL, 0, MENU_NONE},
     {ITT_LRFUNC, "MUSIC VOLUME", SCMusicVolume, 0, MENU_NONE},
-    {ITT_EMPTY, NULL, NULL, 0, MENU_NONE}
+    {ITT_EMPTY, NULL, NULL, 0, MENU_NONE},
+#ifdef HERETIC360
+    // Heretic 360: the AdLib music, or recordings of the songs from files (xenon/i_musicfiles.c).
+    {ITT_LRFUNC2, "MUSIC :", SCMusicFiles, 0, MENU_NONE},
+#endif
 };
 
 static Menu_t Options2Menu = {
     90, 20,
     DrawOptions2Menu,
+#ifdef HERETIC360
+    7, Options2Items,
+#else
     6, Options2Items,
+#endif
     0,
     MENU_OPTIONS
 };
@@ -1513,6 +1523,9 @@ static void DrawOptions2Menu(void)
     DrawSlider(&Options2Menu, 1, 14, screenblocks - 3);
     DrawSlider(&Options2Menu, 3, 16, snd_MaxVolume);
     DrawSlider(&Options2Menu, 5, 16, snd_MusicVolume);
+#ifdef HERETIC360
+    MN_DrTextB(music_files ? "DIGITAL" : "ADLIB", 196, Options2Menu.y + 6 * ITEM_HEIGHT);
+#endif
 }
 
 //---------------------------------------------------------------------------
@@ -1933,6 +1946,14 @@ static boolean SCJoyInvert(int option)
 static boolean SCJoyAlwaysRun(int option)
 {
     joystick_always_run = !joystick_always_run;
+    return true;
+}
+
+// Heretic 360: the AdLib music or the songs' files (Options > More > Music), switched at once.
+static boolean SCMusicFiles(int option)
+{
+    music_files = !music_files;
+    S_SetMusicFiles(music_files);
     return true;
 }
 

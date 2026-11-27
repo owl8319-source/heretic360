@@ -803,6 +803,13 @@ static default_t extra_defaults_list[] =
     CONFIG_VARIABLE_INT(smooth_pixel_scaling),
 #ifdef HERETIC360
     CONFIG_VARIABLE_INT(display_size),
+
+    //!
+    // Heretic 360: if non-zero, recordings of the songs play, from OGG or MP3 files in the music folder beside the
+    // .xex (music/e1m1.ogg and so on), in place of the AdLib music; a song with no file plays as AdLib.
+    //
+
+    CONFIG_VARIABLE_INT(music_files),
 #endif
 
     //!

@@ -19,6 +19,7 @@
 #include "deh_str.h"
 #include "doomtype.h"
 #include "i_sound.h"
+#include "i_musicfiles.h"
 #include "i_system.h"
 #include "m_argv.h"
 #include "m_config.h"
@@ -110,8 +111,10 @@ static int snd_mport = 0;
 
 // The mixer, on SDL's audio thread, which holds the stream's lock while it runs.
 
-// The music, added into the mix after the sound effects: the OPL chip (xenon/opl_xsdk.c), when music is on.
+// The music, added into the mix after the sound effects: the OPL chip (xenon/opl_xsdk.c), when music is on, and the
+// songs' recordings (xenon/i_musicfiles.c), when they're on. Only one of them plays at a time (heretic/s_sound.c).
 static void (*music_generator)(int32_t *mix, int frames) = NULL;
+static void (*file_music_generator)(int32_t *mix, int frames) = NULL;
 
 static void MixChannels(int16_t *out, int frames)
 {
@@ -156,6 +159,11 @@ static void MixChannels(int16_t *out, int frames)
     if (music_generator != NULL)
     {
         music_generator(mix, frames);
+    }
+
+    if (file_music_generator != NULL)
+    {
+        file_music_generator(mix, frames);
     }
 
     for (int i = 0; i < frames * MIX_CHANNELS; i++)
@@ -453,6 +461,21 @@ int I_SetMusicGenerator(void (*generator)(int32_t *mix, int frames))
     return true;
 }
 
+// Sets or clears the music files' generator (xenon/i_musicfiles.c); false if there's no mixer.
+int I_SetFileMusicGenerator(void (*generator)(int32_t *mix, int frames))
+{
+    if (stream == NULL)
+    {
+        return generator == NULL;
+    }
+
+    LockStream();
+    file_music_generator = generator;
+    UnlockStream();
+
+    return true;
+}
+
 void I_InitMusic(void)
 {
     if (M_CheckParm("-nomusic") > 0 || M_CheckParm("-nosound") > 0)
@@ -602,6 +625,8 @@ void I_BindSoundVariables(void)
     M_BindIntVariable("snd_samplerate",          &snd_samplerate);
     M_BindIntVariable("snd_cachesize",           &snd_cachesize);
     M_BindIntVariable("opl_io_port",             &opl_io_port);
+    // The songs' recordings, as files, in place of the AdLib music (xenon/i_musicfiles.c).
+    M_BindIntVariable("music_files",             &music_files);
     M_BindIntVariable("snd_pitchshift",          &snd_pitchshift);
     M_BindStringVariable("music_pack_path",      &music_pack_path);
     M_BindStringVariable("timidity_cfg_path",    &timidity_cfg_path);

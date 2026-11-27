@@ -36,6 +36,10 @@ void S_Init(void);
 void S_GetChannelInfo(SoundInfo_t * s);
 void S_SetMaxVolume(boolean fullprocess);
 void S_SetMusicVolume(void);
+#ifdef HERETIC360
+// Heretic 360: the songs' recordings, as files, on or off (Options > More > Music).
+void S_SetMusicFiles(boolean on);
+#endif
 void S_UpdateSndChannels(int option); // [crispy]
 
 #endif

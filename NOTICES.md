@@ -11,6 +11,13 @@ https://github.com/owl8319-source/heretic360, the release's tag. Crispy Doom: ht
 The music's OPL chip emulator, Nuked OPL3 (`opl/opl3.c`), is by Nuke.YKT, with changes by Tony Gies (Nuked-OPL3-fast),
 under the GNU LGPL version 2.1 or later.
 
+## The music files' decoders
+
+`third_party/stb_vorbis.c`, stb_vorbis v1.25 by Sean Barrett (https://github.com/nothings/stb), and
+`third_party/dr_mp3.h`, dr_mp3 v0.7.4 by David Reid (https://github.com/mackron/dr_libs), based on minimp3 by
+Lion (lieff). Both are in the public domain, or under the MIT licence (stb_vorbis) and MIT No Attribution (dr_mp3)
+where public domain isn't recognised; neither asks a binary to carry a notice, and they're named here as thanks.
+
 ## The controller picture
 
 `art/360_controller.svg`, drawn into the game as `src/heretic/info360_art.h`: "360 controller.svg" by Alphathon,

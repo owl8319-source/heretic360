@@ -30,6 +30,10 @@
 #include "w_wad.h"
 #include "z_zone.h"
 
+#ifdef HERETIC360
+#include "i_musicfiles.h"
+#endif
+
 /*
 ===============================================================================
 
@@ -73,6 +77,56 @@ void S_Start(void)
     memset(channel, 0, snd_Channels * sizeof(channel_t));
 }
 
+#ifdef HERETIC360
+// Heretic 360: recordings of the songs, as files (Options > More > Music; xenon/i_musicfiles.c), in place of the
+// AdLib music. Whether they're on (the setting, and a sound to play them in), whether one is playing, and the song
+// asked for last, for when the setting changes as the game runs.
+static boolean files_on = false;
+static boolean file_playing = false;
+static boolean file_loop = false;
+static int last_song = -1;
+static boolean last_loop = true;
+
+// Plays the song's file, its own (Crispy's names for the later episodes' levels) or the one the game plays there;
+// false if there's none.
+static boolean StartFileSong(int song, boolean loop)
+{
+    int file = -1;
+
+    if (!files_on)
+    {
+        return false;
+    }
+
+    if (S_music[song][1].name != NULL)
+    {
+        file = I_MusicFilesFind(S_music[song][1].name);
+    }
+    if (file < 0)
+    {
+        file = I_MusicFilesFind(S_music[song][0].name);
+    }
+
+    if (file < 0 || !I_MusicFilesPlay(file, loop))
+    {
+        return false;
+    }
+
+    file_playing = true;
+    file_loop = loop;
+    return true;
+}
+
+static void StopFileSong(void)
+{
+    if (file_playing)
+    {
+        I_MusicFilesPlay(-1, false);
+        file_playing = false;
+    }
+}
+#endif
+
 void S_StartSong(int song, boolean loop)
 {
     int mus_len;
@@ -86,12 +140,27 @@ void S_StartSong(int song, boolean loop)
     {
         I_StopSong();
         I_UnRegisterSong(rs);
+#ifdef HERETIC360
+        rs = NULL;
+#endif
     }
 
     if (song < mus_e1m1 || song > NUMMUSIC)
     {
         return;
     }
+
+#ifdef HERETIC360
+    last_song = song;
+    last_loop = loop;
+    StopFileSong();
+
+    if (StartFileSong(song, loop))
+    {
+        mus_song = song;
+        return;
+    }
+#endif
     // [crispy] support dedicated music tracks for each map
     if (S_music[song][1].name && W_CheckNumForName(S_music[song][1].name) > 0)
     {
@@ -464,12 +533,44 @@ void S_SoundLink(mobj_t * oldactor, mobj_t * newactor)
 void S_PauseSound(void)
 {
     I_PauseSong();
+#ifdef HERETIC360
+    I_MusicFilesPause(true);
+#endif
 }
 
 void S_ResumeSound(void)
 {
     I_ResumeSong();
+#ifdef HERETIC360
+    I_MusicFilesPause(false);
+#endif
 }
+
+#ifdef HERETIC360
+// Turns the songs' files on or off as the game runs (Options > More > Music), and plays the song asked for last again
+// the new way.
+void S_SetMusicFiles(boolean on)
+{
+    const int song = last_song;
+
+    StopFileSong();
+    if (rs != NULL)
+    {
+        I_StopSong();
+        I_UnRegisterSong(rs);
+        rs = NULL;
+    }
+    mus_song = -1;
+
+    files_on = on && I_MusicFilesInit();
+    S_SetMusicVolume();
+
+    if (song >= 0)
+    {
+        S_StartSong(song, last_loop);
+    }
+}
+#endif
 
 void S_UpdateSounds(mobj_t * listener)
 {
@@ -478,6 +579,19 @@ void S_UpdateSounds(mobj_t * listener)
     int sep;
     int priority;
     int absx;
+
+#ifdef HERETIC360
+    // A looping file only stops when it couldn't be played (xenon/i_musicfiles.c), which then counts as no file: the
+    // song plays again, as AdLib.
+    if (file_playing && file_loop && !I_MusicFilesPlaying())
+    {
+        const int song = mus_song;
+
+        file_playing = false;
+        mus_song = -1;
+        S_StartSong(song, file_loop);
+    }
+#endif
     int absy;
 
     I_UpdateSound();
@@ -579,6 +693,15 @@ void S_Init(void)
     I_SetMusicVolume(snd_MusicVolume * 8);
     S_SetMaxVolume(true);
 
+#ifdef HERETIC360
+    // The songs' files, when the setting is on (music_files; xenon/i_musicfiles.c).
+    if (music_files)
+    {
+        files_on = I_MusicFilesInit();
+    }
+    I_MusicFilesSetVolume(snd_MusicVolume);
+#endif
+
     I_AtExit(S_ShutDown, true);
 
     // Heretic defaults to pitch-shifting on
@@ -642,6 +765,9 @@ void S_SetMaxVolume(boolean fullprocess)
 static boolean musicPaused;
 void S_SetMusicVolume(void)
 {
+#ifdef HERETIC360
+    I_MusicFilesSetVolume(snd_MusicVolume);
+#endif
     I_SetMusicVolume(snd_MusicVolume * 8);
     if (snd_MusicVolume == 0)
     {
@@ -657,8 +783,17 @@ void S_SetMusicVolume(void)
 
 void S_ShutDown(void)
 {
+#ifdef HERETIC360
+    StopFileSong();
+    if (rs != NULL)
+    {
+        I_StopSong();
+        I_UnRegisterSong(rs);
+    }
+#else
     I_StopSong();
     I_UnRegisterSong(rs);
+#endif
     I_ShutdownSound();
 }
 

@@ -118,6 +118,10 @@ D-pad or left stick chooses, A selects, B closes. It isn't in the main menu or t
 
 ## Display
 
+On a 4:3 screen (a CRT at 480p, or the dashboard's display set to normal rather than widescreen), the game uses the
+console's own 4:3 display, and Crispy's **Aspect ratio: match screen** (the default) gives a 4:3 picture that fills
+it. `heretic.log` says which the console reported.
+
 **Options > Display** has **brightness** (Crispy's 18 levels, -4 to 4; 0, the default, is the original's) and
 **picture size**, 80% to 100% of the screen, for a TV that cuts off the picture's edges (overscan). The picture is
 shrunk evenly in the middle of the screen, with black around it, so nothing is stretched. Both are saved, as
@@ -232,7 +236,8 @@ Crispy draws a patch partly off the screen clipped, so 0.6's check for one (in `
 ## Changes
 
 - **0.8.5:** music from recordings of the songs, as OGG or MP3 files in a `music` folder (Options > More > Music:
-  Digital), with Hexen 360's player; a song without a file plays as AdLib.
+  Digital), with Hexen 360's player; a song without a file plays as AdLib. 4:3 screens fill the screen: on a 480p CRT
+  or a dashboard set to normal, the picture was a small box with black bars around it (found in Hexen 360).
 - **0.8.4** (GitHub issue #1's third request): quick save and quick load, which can go on any button (Options >
   Button Layout; no button has them to start with); Options > Display, with brightness (only F11 changed it before)
   and a picture size for TVs with overscan. The Options menu sits a little higher for its seventh item.

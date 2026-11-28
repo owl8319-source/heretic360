@@ -6,6 +6,11 @@
 // in the middle of the 1280x720 display, shaped as Crispy's aspect_ratio_correct shows it on a PC: 4:3, 960x720 with
 // black bars either side, or the display's full 16:9 in widescreen. xsdk scales the 720p frame to the console's
 // output. Crispy's menu changes the resolution and widescreen as the game runs (I_ReInitGraphics).
+//
+// A 4:3 screen (a CRT at 480p, or the dashboard's display set to normal rather than widescreen) is different: xsdk
+// would letterbox the 1280x720 frame on it, a small picture between black bars, and a 4:3 picture in that frame would
+// have bars at the sides too. There the game uses the console's own 4:3 display (640x480 on the consoles tested), and
+// Crispy's "match screen" aspect ratio is 4:3, so the picture fills the screen (ScreenIs4By3).
 
 #include "config.h"
 
@@ -237,6 +242,27 @@ static void WriteQuad(void)
     WriteGPU(quad_vertices, quad, sizeof quad);
 }
 
+// Whether the console's screen is 4:3 (VdQueryVideoMode, once): the dashboard's display setting, normal rather than
+// widescreen, which a 480p CRT has.
+static boolean ScreenIs4By3(void)
+{
+    static int is_4_3 = -1;
+
+    if (is_4_3 < 0)
+    {
+        VIDEO_MODE video;
+
+        memset(&video, 0, sizeof(video));
+        VdQueryVideoMode(&video);
+        is_4_3 = !video.is_widescreen;
+        printf("heretic360: the console's output is %ux%u%s, %s\n", (unsigned) video.display_width,
+               (unsigned) video.display_height, video.is_interlaced ? " interlaced" : "",
+               is_4_3 ? "4:3, so the game uses the console's own 4:3 display" : "widescreen");
+    }
+
+    return is_4_3 != 0;
+}
+
 static void MakeSampler(void)
 {
     const uint32_t filter = smooth_pixel_scaling ? XSDK_FILTER_LINEAR : XSDK_FILTER_POINT;
@@ -283,7 +309,9 @@ static void OpenGPU(void)
         I_Error("I_InitGraphics: xsdk_gpu_alloc failed");
     }
 
-    status = xsdk_present_open(XSDK_DISPLAY_720P, BUFFERS, SWAP_INTERVAL, &display_width, &display_height);
+    // 1280x720 scaled to the output where it's widescreen; the console's own display where it's 4:3 (ScreenIs4By3).
+    status = xsdk_present_open(ScreenIs4By3() ? XSDK_DISPLAY_KERNEL : XSDK_DISPLAY_720P, BUFFERS, SWAP_INTERVAL,
+                               &display_width, &display_height);
     if (!NT_SUCCESS(status))
     {
         I_Error("I_InitGraphics: xsdk_present_open failed: 0x%08X", (unsigned) status);
@@ -657,7 +685,12 @@ void I_GetScreenDimensions(void)
                 h = 9;
                 break;
             default:
-                // RATIO_MATCH_SCREEN: the console's display.
+                // RATIO_MATCH_SCREEN: the console's display, 16:9 or 4:3 (ScreenIs4By3).
+                if (ScreenIs4By3())
+                {
+                    w = 4;
+                    h = 3;
+                }
                 break;
         }
 
